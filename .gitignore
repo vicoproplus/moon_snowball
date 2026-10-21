@@ -1,0 +1,13 @@
+*.pyc
+_build/
+.mooncakes/
+.planning/logs/
+.planning/tmp/
+.planning/data/
+.planning/facts/
+.probe/
+docs/
+snowball/
+stray/
+*.log
+申报书*
