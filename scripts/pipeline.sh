@@ -310,6 +310,13 @@ log_err() {
     printf '%s\n' "$*" >>"$PIPELINE_LOG" 2>/dev/null || true
 }
 
+# emit_regenerated <abs path> — FR-08's marker: one line per artifact a stage
+# rewrote in this run.  It is NOT a `stage=` line and never replaces one; it
+# exists so a hand edit that a re-run wipes out is visible in the run log.
+emit_regenerated() {
+    log_line "regenerated $1"
+}
+
 # emit_field <key> <value> — `key=value`.
 emit_field() {
     log_line "$1=$2"
@@ -1380,6 +1387,11 @@ stage_generate() {
             return "$EXIT_GENERATE"
         fi
         gen_emit "out_root $_vg_out/11 inputs (10 vendored py32 + porter cached)"
+        # FR-08: one marker per artifact this stage established in out_root.
+        # porter311 is vendored, never generated, so it is not one of them.
+        for _gen_lang in $GEN_LANGS; do
+            emit_regenerated "$OUT_ROOT_ABS/${_gen_lang}_stemmer.py"
+        done
         return 0
     fi
 
@@ -1525,6 +1537,12 @@ $GEN2_ROOT"
         return "$EXIT_GENERATE"
     fi
     gen_emit "out_root $_gen_out_same/11 identical to gen1"
+    # FR-08: every deliverable input this stage wrote into out_root.  The two
+    # parity directories are reconsidered baselines, not artifacts handed on,
+    # and porter311 is vendored: none of them is marked here.
+    for _gen_lang in $GEN_LANGS; do
+        emit_regenerated "$OUT_ROOT_ABS/${_gen_lang}_stemmer.py"
+    done
     return 0
 }
 
@@ -1708,6 +1726,8 @@ stage_translate() {
         _tr_total=$((_tr_total + _tr_lines))
         _tr_now=$(date +%s)
         tr_emit "stage=translate lang=$_tr_lang file=$_tr_py out=$_tr_mbt lines=$_tr_lines elapsed=$((_tr_now - _tr_start))"
+        # FR-08: the translator rewrote this artifact in this run.
+        emit_regenerated "$_tr_mbt"
         _tr_start=$_tr_now
     done
 
@@ -1885,6 +1905,8 @@ stage_fmt() {
             *) _fmt_ctrl_total=$((_fmt_ctrl_total + ${_fmt_n:-0})) ;;
         esac
         fmt_emit "stage=fmt lang=$_fmt_lang file=$_fmt_lang/${_fmt_lang}_gen.mbt lines=$_fmt_n md5=$_fmt_md5"
+        # FR-08: `moon fmt` rewrote this deliverable in this run.
+        emit_regenerated "$MODULE_ROOT/$_fmt_lang/${_fmt_lang}_gen.mbt"
     done
     fmt_emit "formatted $_fmt_files/11 lines=$_fmt_total (post-moon fmt form)"
     fmt_emit "formatted porter311/1 lines=$_fmt_ctrl_total (control row; 12 inputs = $((_fmt_total + _fmt_ctrl_total)) lines)"
@@ -2209,6 +2231,12 @@ run_stage() {
 # Dispatcher — fail-fast, a later stage is never entered after a failure.
 # ---------------------------------------------------------------------------
 
+# FR-17's clock: `total=` measures the six-stage chain, so it starts here and
+# not at process start - the preflight/probe seconds are not stage time, and
+# counting them would make `total` and `stage_sum` two different quantities.
+RUN_T0=$(date +%s)
+STAGE_SUM=0
+
 for _stage in $RUN_STAGES; do
     STAGE_START=$(date +%s)
     emit_field stage "$_stage"
@@ -2218,12 +2246,37 @@ for _stage in $RUN_STAGES; do
     _now=$(date +%s)
     emit_field stage "$_stage"
     emit_field exit "$_rc"
+    STAGE_SUM=$((STAGE_SUM + (_now - STAGE_START)))
     emit_field elapsed "$((_now - STAGE_START))"
     if [ "$_rc" -ne 0 ]; then
         log_err "stage=$_stage exit=$_rc (fail-fast: no later stage is entered)"
         exit "$_rc"
     fi
 done
+
+# FR-17: the run's total wall-clock seconds against the sum of the six stage
+# elapsed values.  A gap above 1 s means the seconds spent outside the six
+# stages (preflight, the wslpath probe, the run's own setup) is large enough
+# to matter; it is diagnostic only, so a gap is warned about and never fails.
+# Only a full run is totalled: a `--only`/`--stage` selection covers fewer
+# than six stages, and a six-stage total would then be a lie.
+_stages_n=0
+for _s in $RUN_STAGES; do
+    _stages_n=$((_stages_n + 1))
+done
+if [ "$_stages_n" -eq 6 ]; then
+    _total=$((_now - RUN_T0))
+    emit_field total "$_total"
+    emit_field stages "$(printf '%s' "$RUN_STAGES" | tr ' ' ',')"
+    emit_field stage_sum "$STAGE_SUM"
+    _delta=$((_total - STAGE_SUM))
+    if [ "$_delta" -lt 0 ]; then
+        _delta=$((0 - _delta))
+    fi
+    if [ "$_delta" -gt 1 ]; then
+        log_line "WARN total-vs-sum delta=$_delta"
+    fi
+fi
 
 emit_field exit 0
 exit 0
