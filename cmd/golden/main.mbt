@@ -12,12 +12,16 @@
 //
 //     lang=<n> lines=<M>
 //
-// rows carrying the line count of the generated `<lang>/<lang>_gen.mbt`
-// (Task 12 adds the 20% drift warning on top of these rows), and finally
+// rows carrying the line count of the generated `<lang>/<lang>_gen.mbt`.
+// Task 12 (FR-20) judges each of those rows against the committed baseline
+// below and appends ` WARN line-count drift` when the count moves more than
+// 20% away from it, then prints the summary row
 //
-//     golden: <ok>/<total> mismatch=<sum>
+//     line-count drift: <k>/12
 //
-// The driver is judged by `scripts/gate.sh`; it never prints `GATE OK` itself.
+// with k the number of warned rows.  A WARN is a warning, never a failure:
+// `scripts/gate.sh` judges only the comparison rows.  The driver is judged
+// by that gate; it never prints `GATE OK` itself.
 //
 // Data root precedence (R-2 / contract §4): `--data-root <p>` >
 // `SNOWBALL_DATA_ROOT` > module-relative `.planning/data/sd` (resolved against
@@ -347,6 +351,56 @@ fn gen_lines(module_root : String, name : String) -> Int raise @fs.IOError {
 }
 
 ///|
+/// Line-count baselines of the twelve generated packages (Task 12 / FR-20).
+///
+/// Source: spec F-U2-21, the T5 post-`moon fmt` committed form of each
+/// `<lang>/<lang>_gen.mbt` (10,837 lines for the eleven deliverable packages,
+/// 11,407 including the porter311 control row).  This is the ONE baseline
+/// table; it is in row order (registry order, porter311 last).  The registry's
+/// own `lines` field is the CORPUS line count, so it cannot serve here.
+fn baseline_rows() -> Array[(String, Int)] {
+  [
+    ("arabic", 1063),
+    ("dutch", 1572),
+    ("english", 885),
+    ("french", 1171),
+    ("german", 553),
+    ("italian", 837),
+    ("porter", 538),
+    ("portuguese", 730),
+    ("russian", 511),
+    ("spanish", 768),
+    ("turkish", 2209),
+    ("porter311", 570),
+  ]
+}
+
+///|
+/// The baseline for one row name.  An unknown name is a driver bug, not a
+/// silently accepted row: fail instead of guessing a baseline.
+fn baseline_of(name : String) -> Int raise @fs.IOError {
+  for entry in baseline_rows() {
+    if entry.0 == name {
+      return entry.1
+    }
+  }
+  fail("golden: no line-count baseline for \{name}")
+}
+
+///|
+/// True when `measured` drifted more than 20% from `baseline`, i.e.
+/// `|M - B| / B > 0.20`.  Evaluated as `|M - B| * 5 > B` so the comparison is
+/// exact and a move of exactly 20% does not warn.
+fn line_count_drifted(measured : Int, baseline : Int) -> Bool {
+  let diff = if measured >= baseline {
+    measured - baseline
+  } else {
+    baseline - measured
+  }
+  diff * 5 > baseline
+}
+
+///|
 /// Parse `--data-root` / `--arabic-dir` (space or `=` form).  Anything else is
 /// a usage error (exit 2) — never a silent fallback.
 fn parse_args(args : Array[String]) -> (String?, String?) raise @fs.IOError {
@@ -453,12 +507,21 @@ fn run() -> Int raise @fs.IOError {
   }
 
   // The `lines=` block (Task 12's drift baseline): one row per language, in
-  // the same order as the comparison rows.
+  // the same order as the comparison rows, each judged against the committed
+  // baseline and marked with ` WARN line-count drift` when it moved >20%.
   let module_root = cwd()
+  let mut warned = 0
   for row in rows {
     let lines = gen_lines(module_root, row.name)
-    println("lang=\{row.name} lines=\{lines}")
+    let baseline = baseline_of(row.name)
+    if line_count_drifted(lines, baseline) {
+      warned += 1
+      println("lang=\{row.name} lines=\{lines} WARN line-count drift")
+    } else {
+      println("lang=\{row.name} lines=\{lines}")
+    }
   }
+  println("line-count drift: \{warned}/\{rows.length()}")
 
   println("golden: \{ok}/\{rows.length()} mismatch=\{total_mismatch}")
   check_boundary_case()

@@ -2119,6 +2119,17 @@ stage_golden() {
             >"$GOLDEN_LOG" 2>&1
     fi
     _g_rc=$?
+
+    # The native driver's stdout carries CRLF on Windows; normalise the
+    # transcript to LF so a `$`-anchored grep (the brief's step-4 acceptance)
+    # and the gate see one line-ending convention.  Content is otherwise
+    # untouched; the exit code was captured above and is unaffected.
+    _g_norm="$GOLDEN_LOG.norm.$$"
+    if tr -d '\r' <"$GOLDEN_LOG" >"$_g_norm" 2>/dev/null; then
+        mv -f "$_g_norm" "$GOLDEN_LOG"
+    else
+        rm -f "$_g_norm"
+    fi
     if [ "$_g_rc" -ne 0 ]; then
         # The first stderr line is the driver's own diagnostic (absolute path
         # + `missing`, a line-count mismatch, or a mismatch summary).
@@ -2134,6 +2145,25 @@ stage_golden() {
     done <"$GOLDEN_GATE_LOG"
     if [ "$_g_gate_rc" -ne 0 ]; then
         log_err "golden failed: scripts/gate.sh exited $_g_gate_rc (driver exit=$_g_rc)"
+        log_err "stage=golden exit=$EXIT_GOLDEN"
+        return "$EXIT_GOLDEN"
+    fi
+
+    # Task 12 (FR-20): the twelve `lang=<n> lines=<M>` rows and the
+    # `line-count drift: <k>/12` summary must both be present.  A warned row
+    # (` WARN line-count drift`) is NOT a gate failure — drift is a warning by
+    # design — but a missing row set is: the driver would have stopped emitting
+    # the baseline block.  Both facts are logged so the transcript carries them.
+    _g_line_rows=$(grep -cE '^lang=.* lines=' "$GOLDEN_LOG" 2>/dev/null)
+    _g_drift=$(grep -oE 'line-count drift: [0-9]+/12' "$GOLDEN_LOG" 2>/dev/null)
+    _g_warns=$(grep -cE '^lang=.* lines=.* WARN line-count drift$' "$GOLDEN_LOG" 2>/dev/null)
+    if [ "$_g_line_rows" -ne 12 ]; then
+        log_err "golden failed: expected 12 lines= rows, got ${_g_line_rows:-0}"
+        log_err "stage=golden exit=$EXIT_GOLDEN"
+        return "$EXIT_GOLDEN"
+    fi
+    if [ -z "$_g_drift" ]; then
+        log_err "golden failed: the 'line-count drift: <k>/12' summary is missing"
         log_err "stage=golden exit=$EXIT_GOLDEN"
         return "$EXIT_GOLDEN"
     fi
@@ -2154,6 +2184,7 @@ stage_golden() {
     _g_rows=$(grep -cE '^lang=[^ ]+ checked=[0-9]+ mismatch=0 ' "$GOLDEN_LOG" 2>/dev/null)
     _g_now=$(date +%s)
     log_line "stage=golden rows=$_g_rows mismatch=0 elapsed=$((_g_now - _g_start))"
+    log_line "golden lines=$_g_line_rows drift=$_g_drift warned=$_g_warns"
     log_line "GATE OK"
     return 0
 }
