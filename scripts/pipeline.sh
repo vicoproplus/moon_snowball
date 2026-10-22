@@ -96,6 +96,9 @@
 #     9  the unpack stage failed (the corpus is incomplete after the fetch,
 #        git is missing, the clone failed, or the arabic artifact did not
 #        verify)
+#    10  the check stage failed (moon check non-zero or not success, a
+#        non-zero error/warning count, the 15-package assertion, moon info
+#        failing, a `.mbti` count, a D-1 verdict, or a dialect retrieval hit)
 #     other  the exit code of the first failing stage.  The run is fail-fast:
 #        a later stage is never entered after a failure.
 #
@@ -148,7 +151,7 @@ EXIT_GENERATE=6
 EXIT_TRANSLATE=7
 EXIT_FMT=8
 EXIT_UNPACK=9
-
+EXIT_CHECK=10
 
 # The generate stage (Task 3) has its own log: the per-language command
 # lines and the two parity claims live there.  It is truncated at the start
@@ -175,6 +178,27 @@ FMT_MD5_A="$LOG_ROOT/T5-md5-a.txt"
 FMT_MD5_B="$LOG_ROOT/T5-md5-b.txt"
 FMT_LINES_A="$LOG_ROOT/T5-lines-a.txt"
 FMT_LINES_B="$LOG_ROOT/T5-lines-b.txt"
+
+# The check stage (Task 6) writes three evidence files.  CHECK_LOG is the raw
+# `moon check --json` transcript (the brief's T6-check.json), CHECK_MBTI_LOG
+# holds every `.mbti` count taken AFTER `moon info` (D-8), and
+# CHECK_DIALECT_LOG holds the D-1 per-package verdicts, the two fail-closed
+# cases and the D-2..D-6 / D-12 / D-14 retrieval counts.  CHECK_LOG_TXT is the
+# human-readable transcript of the assertion run; it is copied into the run log
+# line by line and is not itself a deliverable.
+CHECK_LOG="$LOG_ROOT/T6-check.json"
+CHECK_MBTI_LOG="$LOG_ROOT/T6-mbti.log"
+CHECK_DIALECT_LOG="$LOG_ROOT/T6-dialect.log"
+CHECK_LOG_TXT="$LOG_ROOT/T6-check-assert.log"
+
+# The python interpreter is a Windows build under Git-Bash: it cannot open a
+# POSIX path such as /f/... .  Every path handed to python is therefore given
+# relative to the module root (the subprocess runs with that cwd), which is
+# valid in both namespaces; only the shell's own redirects use the absolute
+# POSIX form above.
+CHECK_LOG_REL=".planning/logs/u2/T6-check.json"
+CHECK_MBTI_REL=".planning/logs/u2/T6-mbti.log"
+CHECK_DIALECT_REL=".planning/logs/u2/T6-dialect.log"
 
 # (The fmt stage snapshots through the shared snapshot_root helper below.)
 
@@ -1628,8 +1652,157 @@ stage_fmt() {
 }
 
 stage_check() {
-    log_err "check is not implemented: Task 6 wires the moon check gate."
-    return 2
+    # ------------------------------------------------------------------
+    # Task 6 - the compile gate.
+    #
+    # `moon check` is the gate, never `moon build`: a bare build only
+    # compiles the executable closure, so an unreferenced package (porter311,
+    # for instance) is never type-checked.  The negative proof is in the T6
+    # report; the rule it establishes is D-7, and this stage is where D-7 is
+    # enforced.
+    #
+    # Four claims, in this order:
+    #   1. `moon check --json` says success with 0 errors and 0 warnings
+    #      (the JSON is kept verbatim as T6-check.json).
+    #   2. the module has exactly 15 packages - the 14 sub-packages plus the
+    #      empty-rel root package that carries lang_registry.mbt (N8).
+    #   3. `moon info` runs BEFORE any `.mbti` assertion (D-8), and then the
+    #      AD2-1..AD2-5 / AD2-2 / AD2-8 counts hold (T6-mbti.log).
+    #   4. the dialect red lines hold: D-1 by semantic check per package
+    #      (never with the repository root as scope: B7), the two
+    #      fail-closed cases, and the D-2..D-6 / D-12 / D-14 retrievals
+    #      (T6-dialect.log).
+    #
+    # Exit codes are taken from the command itself, never through tee.
+    # ------------------------------------------------------------------
+
+    _ck_start=$(date +%s)
+
+    # -- 1. moon check ---------------------------------------------------
+    # The JSON goes to its own log; stdout/stderr of the run are appended to
+    # it so a diagnostic that the toolchain prints outside the JSON (the
+    # `[4014]` block, for example) is preserved next to it.
+    ( cd "$MODULE_ROOT" && moon check --json ) >"$CHECK_LOG" 2>&1
+    _ck_rc=$?
+    if [ "$_ck_rc" -ne 0 ]; then
+        log_err "check failed: moon check --json exited $_ck_rc"
+        tail -n 20 "$CHECK_LOG" 2>/dev/null >&2
+        log_err "stage=check exit=$EXIT_CHECK"
+        return "$EXIT_CHECK"
+    fi
+
+    # The three fields are asserted in one pass so a failure names every
+    # field that is wrong, not just the first one.
+    _ck_json=$( cd "$MODULE_ROOT" && "$PYTHON_BIN" - "$CHECK_LOG_REL" <<'PY'
+import json, sys
+try:
+    d = json.load(open(sys.argv[1], encoding='utf-8'))
+except Exception as exc:
+    print('BAD_JSON %s' % exc)
+    sys.exit(1)
+summary = d.get('summary') or {}
+bad = []
+if d.get('status') != 'success':
+    bad.append('status=%r (want success)' % d.get('status'))
+if summary.get('moon_errors') != 0:
+    bad.append('moon_errors=%r (want 0)' % summary.get('moon_errors'))
+if summary.get('moon_warnings') != 0:
+    bad.append('moon_warnings=%r (want 0)' % summary.get('moon_warnings'))
+print('%s %s %s' % (d.get('status'), summary.get('moon_errors'),
+                    summary.get('moon_warnings')))
+if bad:
+    print('FAIL ' + '; '.join(bad))
+    sys.exit(1)
+sys.exit(0)
+PY
+    )
+    _ck_json_rc=$?
+    if [ "$_ck_json_rc" -ne 0 ]; then
+        log_err "check failed: moon check --json assertion: $(printf '%s' "$_ck_json" | tail -n 1)"
+        log_err "stage=check exit=$EXIT_CHECK"
+        return "$EXIT_CHECK"
+    fi
+
+    # -- 2. the 15 packages (N8) ----------------------------------------
+    # Counted from all_pkgs.json, never hard-coded: the count and the rel-set
+    # are both read back from what the toolchain actually planned.  A
+    # mismatch prints the set difference.
+    _ck_pkgs=$( cd "$MODULE_ROOT" && "$PYTHON_BIN" - <<'PY'
+import json, pathlib, re, sys
+root = pathlib.Path.cwd()
+m = re.search(r'^\s*name\s*=\s*"([^"]+)"',
+              (root / 'moon.mod').read_text(encoding='utf-8'), re.M)
+if not m:
+    print('0')
+    print('FAIL no module name in moon.mod')
+    sys.exit(1)
+mod = m.group(1)
+p = root / '_build/native/debug/check/all_pkgs.json'
+if not p.is_file():
+    print('0')
+    print('FAIL %s missing' % p)
+    sys.exit(1)
+data = json.loads(p.read_text(encoding='utf-8'))
+rels = sorted({x.get('rel', '') for x in data.get('packages', [])
+               if x.get('root') == mod})
+want = {'', 'runtime', 'cmd/golden', 'arabic', 'dutch', 'english', 'french',
+        'german', 'italian', 'porter', 'porter311', 'portuguese', 'russian',
+        'spanish', 'turkish'}
+print(len(rels))
+missing = sorted(want - set(rels))
+extra = sorted(set(rels) - want)
+if len(rels) != 15 or missing or extra:
+    print('FAIL count=%d want=15 missing=%s extra=%s' % (len(rels), missing, extra))
+    sys.exit(1)
+print('OK ' + ' '.join('<' + r + '>' if r == '' else r for r in rels))
+sys.exit(0)
+PY
+    )
+    _ck_pkgs_rc=$?
+    _ck_n=$(printf '%s\n' "$_ck_pkgs" | sed -n 1p)
+    if [ "$_ck_pkgs_rc" -ne 0 ]; then
+        log_err "check failed: package assertion: $(printf '%s\n' "$_ck_pkgs" | sed -n 2p)"
+        log_err "stage=check exit=$EXIT_CHECK"
+        return "$EXIT_CHECK"
+    fi
+
+    # -- 3. refresh the interface files BEFORE asserting on them ---------
+    # D-8: a `.mbti` left over from an older source can be false-green (a
+    # removed `pub fn` still counts) or false-red (a new one is missing).
+    # `moon info` is the refresh; it is never skipped and never run after
+    # the assertions.
+    : >"$CHECK_MBTI_LOG" 2>/dev/null || true
+    ( cd "$MODULE_ROOT" && moon info ) >>"$CHECK_MBTI_LOG" 2>&1
+    _ck_info_rc=$?
+    if [ "$_ck_info_rc" -ne 0 ]; then
+        log_err "check failed: moon info exited $_ck_info_rc (the .mbti assertions cannot be trusted without it)"
+        tail -n 20 "$CHECK_MBTI_LOG" 2>/dev/null >&2
+        log_err "stage=check exit=$EXIT_CHECK"
+        return "$EXIT_CHECK"
+    fi
+
+    # -- 4. the assertions -------------------------------------------------
+    # One helper does the rest (AD2 counts, D-1 per package, the two
+    # fail-closed cases, the D-2..D-6/D-12/D-14 retrievals) and writes the
+    # two evidence logs.  Its stdout is copied into the run so every count
+    # is visible in the pipeline transcript as well.
+    ( cd "$MODULE_ROOT" && "$PYTHON_BIN" tools/check_gate.py \
+        --json "$CHECK_LOG_REL" \
+        --mbti-log "$CHECK_MBTI_REL" \
+        --dialect-log "$CHECK_DIALECT_REL" ) >"$CHECK_LOG_TXT" 2>&1
+    _ck_gate_rc=$?
+    while IFS= read -r _ck_line; do
+        log_line "$_ck_line"
+    done <"$CHECK_LOG_TXT"
+    if [ "$_ck_gate_rc" -ne 0 ]; then
+        log_err "check failed: tools/check_gate.py exited $_ck_gate_rc"
+        log_err "stage=check exit=$EXIT_CHECK"
+        return "$EXIT_CHECK"
+    fi
+
+    _ck_now=$(date +%s)
+    log_line "stage=check packages=$_ck_n errors=0 warnings=0 elapsed=$((_ck_now - _ck_start))"
+    return 0
 }
 
 stage_golden() {
