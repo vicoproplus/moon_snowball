@@ -128,14 +128,16 @@
 # (the host prints /f/..., WSL expects /mnt/f/...): the host->WSL
 # conversion is wslpath, never a hand-written prefix swap.
 #
-# FR-22 (no absolute paths in the delivered scripts) is audited with a grep
-# for Windows-style absolute paths over scripts/, tools/ and cmd/golden/.
-# That audit MUST exclude tools/__pycache__ (GNU grep: --exclude-dir=__pycache__;
-# a plain directory walk is not enough): running any python helper writes .pyc
-# files there that embed the absolute source path, so a naive grep reports
-# build residue as if it were source.  .gitignore ignores *.pyc, but the audit
-# walks the working tree and does not consult it.  This comment deliberately
-# spells no audit pattern, so it cannot match its own audit.
+# FR-22 (no absolute paths in the delivered scripts) is audited by
+# `sh scripts/pipeline.sh --audit-paths`, which runs tools/audit_paths.py over
+# scripts/, tools/ and cmd/golden/.  The three patterns are assembled inside
+# that helper, so this comment cannot match its own audit.  The audit MUST
+# exclude __pycache__ (a plain directory walk is not enough): running any
+# python helper writes .pyc files there that embed the absolute source path,
+# so a naive grep reports build residue as if it were source.  .gitignore
+# ignores *.pyc, but the audit walks the working tree and does not consult it.
+# The helper takes `--root DIR`, which is how the same audit is proved not
+# accidentally green against a renamed copy of the tree.
 
 set -u
 
@@ -188,7 +190,10 @@ FMT_LINES_B="$LOG_ROOT/T5-lines-b.txt"
 # `moon check --json` transcript (the brief's T6-check.json), CHECK_MBTI_LOG
 # holds every `.mbti` count taken AFTER `moon info` (D-8), and
 # CHECK_DIALECT_LOG holds the D-1 per-package verdicts, the two fail-closed
-# cases and the D-2..D-6 / D-12 / D-14 retrieval counts.  CHECK_LOG_TXT is the
+# cases and the D-2..D-6 / D-14 retrieval counts.  D-12 is not a retrieval:
+# it checks the driver's entry point for an explicit non-zero exit path
+# (`fn main` raises, or main wraps a raising function and calls native_exit).
+# CHECK_LOG_TXT is the
 # human-readable transcript of the assertion run; it is copied into the run log
 # line by line and is not itself a deliverable.
 CHECK_LOG="$LOG_ROOT/T6-check.json"
@@ -458,6 +463,7 @@ usage() {
     printf '%s\n' "  --stage=<s> runs the stages up to and including <s> (default: all six)"
     printf '%s\n' "  --only=<s>  runs exactly that one stage (mutually exclusive with --stage)"
     printf '%s\n' "  --sb-root=<p> directory of the upstream Snowball compiler (default: .probe/ctc/sbtest)"
+    printf '%s\n' "  --audit-paths run only the FR-22 absolute-path audit and exit"
 }
 
 # ---------------------------------------------------------------------------
@@ -471,6 +477,7 @@ SB_ROOT_ARG=""
 STAGE_ARG=""
 ONLY_ARG=""
 ONLY_SET=0
+AUDIT_PATHS=0
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -514,6 +521,7 @@ while [ "$#" -gt 0 ]; do
             [ "$#" -gt 0 ] || { log_err "--stage needs a value"; exit "$EXIT_USAGE"; }
             STAGE_ARG="$1"
             ;;
+        --audit-paths) AUDIT_PATHS=1 ;;
         -h|--help)
             usage
             exit 0
@@ -530,6 +538,28 @@ while [ "$#" -gt 0 ]; do
     esac
     shift
 done
+
+# ---------------------------------------------------------------------------
+# FR-22 audit mode — `--audit-paths` runs tools/audit_paths.py and exits with
+# its verdict (0 = no Windows absolute path in scripts/, tools/, cmd/golden/).
+# It is a mode of its own: combining it with a stage selector would have to
+# pick one silently.  The __pycache__/_build/.mooncakes exclusions live in the
+# helper, next to the patterns they protect.
+# ---------------------------------------------------------------------------
+
+if [ "$AUDIT_PATHS" -eq 1 ]; then
+    if [ -n "$STAGE_ARG" ] || [ "$ONLY_SET" -eq 1 ]; then
+        log_err "--audit-paths is a mode of its own (not combinable with --stage/--only)"
+        exit "$EXIT_USAGE"
+    fi
+    _ap_py=$(command -v python 2>/dev/null) || _ap_py=$(command -v python3 2>/dev/null) || _ap_py=""
+    if [ -z "$_ap_py" ]; then
+        log_err "audit-paths: python not found"
+        exit "$EXIT_TOOLCHAIN"
+    fi
+    ( cd "$MODULE_ROOT" && "$_ap_py" tools/audit_paths.py )
+    exit $?
+fi
 
 # ---------------------------------------------------------------------------
 # Stage selection — the six stage names are the single source of truth.
@@ -1725,7 +1755,8 @@ stage_check() {
     #      AD2-1..AD2-5 / AD2-2 / AD2-8 counts hold (T6-mbti.log).
     #   4. the dialect red lines hold: D-1 by semantic check per package
     #      (never with the repository root as scope: B7), the two
-    #      fail-closed cases, and the D-2..D-6 / D-12 / D-14 retrievals
+    #      fail-closed cases, the D-2..D-6 / D-14 retrievals, and D-12: the
+    #      driver entry point has an explicit non-zero exit path
     #      (T6-dialect.log).
     #
     # Exit codes are taken from the command itself, never through tee.
@@ -1838,9 +1869,9 @@ PY
 
     # -- 4. the assertions -------------------------------------------------
     # One helper does the rest (AD2 counts, D-1 per package, the two
-    # fail-closed cases, the D-2..D-6/D-12/D-14 retrievals) and writes the
-    # two evidence logs.  Its stdout is copied into the run so every count
-    # is visible in the pipeline transcript as well.
+    # fail-closed cases, the D-2..D-6/D-14 retrievals and the D-12 exit-path
+    # check) and writes the two evidence logs.  Its stdout is copied into the
+    # run so every count is visible in the pipeline transcript as well.
     ( cd "$MODULE_ROOT" && "$PYTHON_BIN" tools/check_gate.py \
         --json "$CHECK_LOG_REL" \
         --mbti-log "$CHECK_MBTI_REL" \

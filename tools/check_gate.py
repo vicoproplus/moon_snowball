@@ -19,13 +19,20 @@ D-1                  `tools/d1check.py` per package (13 dirs; the root package i
                     checked through a temp copy of its own *.mbt so that the
                     scanner never sees `.probe/`), plus the two fail-closed cases
                     (missing root -> 2, empty dir -> 3).
-D-2..D-6, D-12, D-14 the retrieval greps, scoped to the 15 module-local packages
+D-2..D-6, D-14      the retrieval greps, scoped to the 15 module-local packages
                     that all_pkgs.json just proved exist.  Scope rationale:
                     `.probe/`, `.planning/tmp/`, `_build/` and `.mooncakes/` are
                     forensic/build residue, not deliverables; scanning them is the
                     same defect B7 rejected for D-1.  The literal `.`-scoped
                     counts are still reported, attributed, so the difference is
                     visible rather than hidden.
+D-12 (amended)      `cmd/golden/main.mbt` has an explicit non-zero exit path:
+                    either `fn main` itself carries `raise`, or `main` is a
+                    non-raising wrapper that calls a raising function and ends
+                    in `native_exit`/`abort`/`raise` (the shipped shape:
+                    `let code = run() catch { _ => 1 }; native_exit(code)`).
+                    Controller ruling 2026-10-23; see the D-12 revision
+                    blockquote in the plan.
 
 Exit codes: 0 pass, 1 an assertion failed, 2 usage / missing input.
 Nothing here writes into a source package: the only writes are the two logs
@@ -289,10 +296,64 @@ def grep_files(root, files, pattern, suffix=None):
     return hits
 
 
+def check_d12(root):
+    """D-12: the entry point must have an explicit non-zero exit path.
+
+    Two shapes pass.  (a) `fn main` itself carries `raise`.  (b) `fn main` is
+    a non-raising wrapper: it calls a function declared `raise`, and its own
+    body ends in an explicit exit (`native_exit`, `abort`) — the shipped
+    shape, where the top-level `catch` turns the raise into the driver's
+    numeric exit code.
+
+    Returns (ok, out_lines, message); `message` is the failure text.
+    """
+    exit_kw = ("native_exit", "abort")
+    main_mbt = root / "cmd/golden/main.mbt"
+    if not main_mbt.is_file():
+        return False, [], "D-12 FAIL: cmd/golden/main.mbt is missing"
+    lines = main_mbt.read_text(encoding="utf-8").splitlines()
+    mains = [l for l in lines if re.search(r"\bfn main\b", l)]
+    if not mains:
+        return False, [], "D-12 FAIL: cmd/golden/main.mbt has no `fn main`"
+    ok_a = all("raise" in l for l in mains)
+    # The body of `fn main`: from its declaration to the brace that closes it.
+    start = next(i for i, l in enumerate(lines) if re.search(r"\bfn main\b", l))
+    body, depth = [], 0
+    for l in lines[start:]:
+        body.append(l)
+        depth += l.count("{") - l.count("}")
+        if len(body) > 1 and depth <= 0:
+            break
+    body_text = "\n".join(body)
+    has_exit = any(k in body_text for k in exit_kw)
+    callee = ""
+    if has_exit:
+        for l in lines:
+            m = re.match(r"\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(", l)
+            if not m or m.group(1) == "main":
+                continue
+            name = m.group(1)
+            if not re.search(r"\b%s\b" % re.escape(name), body_text):
+                continue
+            if re.search(r"\bfn\s+%s\b.*\braise\b" % re.escape(name), l):
+                callee = name
+                break
+    ok = ok_a or bool(callee)
+    out = ["D-12   %-28s hits=%d %s  %s" % ("explicit non-zero exit path",
+                                            len(mains), "OK" if ok else "FAIL",
+                                            mains[0].strip())]
+    if callee:
+        out.append("       fn main calls fn %s (declared raise); main ends in %s"
+                   % (callee, "+".join(k for k in exit_kw if k in body_text)))
+    msg = ("D-12 FAIL: cmd/golden/main.mbt has no explicit non-zero exit path "
+           "(no raise and no native_exit/abort)")
+    return ok, out, msg
+
 def check_red_lines(root, rels, dialect_log):
     files = package_files(root, rels)
-    out = ["D-2..D-6 / D-12 / D-14 retrieval, scoped to the %d module-local packages "
-           "(%d .mbt files)" % (len(rels), len(files))]
+    out = ["D-2..D-6 / D-14 retrieval (D-12 is the exit-path check below), "
+           "scoped to the %d module-local packages (%d .mbt files)"
+           % (len(rels), len(files))]
     for tag, pattern, sub, _ in RED_LINES:
         suffix = sub.lstrip("*") or None
         hits = grep_files(root, files, pattern, suffix)
@@ -319,20 +380,11 @@ def check_red_lines(root, rels, dialect_log):
                    % (tag, len(hits),
                       "OK" if not hits else "ATTRIBUTED to " + ", ".join(heads)))
 
-    # D-12: the executable entry point must be allowed to raise.
-    main_mbt = root / "cmd/golden/main.mbt"
-    if main_mbt.is_file():
-        mains = [l for l in main_mbt.read_text(encoding="utf-8").splitlines()
-                 if re.search(r"\bfn main\b", l)]
-        ok = bool(mains) and all("raise" in l for l in mains)
-        out.append("D-12   %-28s hits=%d %s  %s" % ('fn main ... raise', len(mains),
-                                                    "OK" if ok else "FAIL",
-                                                    mains[0].strip() if mains else ""))
-        if not ok:
-            fail("D-12 FAIL: cmd/golden/main.mbt fn main has no `raise`")
-    else:
-        fail("D-12 FAIL: cmd/golden/main.mbt is missing")
-
+    # D-12: the entry point's explicit non-zero exit path (amended shape).
+    ok, d12_out, d12_msg = check_d12(root)
+    out.extend(d12_out)
+    if not ok:
+        fail(d12_msg)
     # D-14: the target key must be spelled exactly; a missing key silently
     # falls back to wasm.
     mod = (root / "moon.mod").read_text(encoding="utf-8", errors="replace")
