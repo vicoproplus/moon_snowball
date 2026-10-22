@@ -99,6 +99,10 @@
 #    10  the check stage failed (moon check non-zero or not success, a
 #        non-zero error/warning count, the 15-package assertion, moon info
 #        failing, a `.mbti` count, a D-1 verdict, or a dialect retrieval hit)
+#    11  the golden stage failed (a corpus file is missing, a voc/output line
+#        count differs, a per-line mismatch, a row count other than 12, a
+#        `checked` value other than the declared one, or a non-zero driver
+#        exit - the tri-state gate scripts/gate.sh decides)
 #     other  the exit code of the first failing stage.  The run is fail-fast:
 #        a later stage is never entered after a failure.
 #
@@ -152,6 +156,7 @@ EXIT_TRANSLATE=7
 EXIT_FMT=8
 EXIT_UNPACK=9
 EXIT_CHECK=10
+EXIT_GOLDEN=11
 
 # The generate stage (Task 3) has its own log: the per-language command
 # lines and the two parity claims live there.  It is truncated at the start
@@ -209,6 +214,13 @@ CHECK_DIALECT_REL=".planning/logs/u2/T6-dialect.log"
 # corpus root is the pipeline's resolved data_root, never a hard-coded path.
 UNPACK_LOG="$LOG_ROOT/T8-unpack.log"
 CORPUS_LOG="$LOG_ROOT/T8-corpus.log"
+# The golden stage (Task 7) writes the driver transcript to T7-golden.log and
+# the tri-state gate verdict to T7-gate.log.  The gate is scripts/gate.sh —
+# the very script the negative tests invoke — so the stage and the tests can
+# never disagree about what a healthy run looks like.
+GOLDEN_LOG="$LOG_ROOT/T7-golden.log"
+GOLDEN_GATE_LOG="$LOG_ROOT/T7-gate.log"
+GOLDEN_GATE="$MODULE_ROOT/scripts/gate.sh"
 UNPACK_SCRIPT="$MODULE_ROOT/tools/unpack_arabic.sh"
 UNPACK_DST="$MODULE_ROOT/build/data/arabic"
 
@@ -1806,8 +1818,75 @@ PY
 }
 
 stage_golden() {
-    log_err "golden is not implemented: Task 7 wires cmd/golden."
-    return 2
+    # ------------------------------------------------------------------
+    # Task 7 - the golden segment (FR-12/FR-13/FR-14/FR-21; prototype
+    # defects P3 and P4).
+    #
+    # Two commands, in this order:
+    #   1. the driver: `moon run cmd/golden`, twelve `lang=... checked=...
+    #      mismatch=...` rows plus twelve `lang=<n> lines=<M>` rows.  Its
+    #      exit code is taken from the command itself:
+    #          moon run cmd/golden > log 2>&1; rc=$?
+    #      never through `| tee`, whose exit code is tee's, not the driver's.
+    #   2. the gate: scripts/gate.sh <log> <rc>, the same script the negative
+    #      tests call.  It re-reads the log structurally and is the only
+    #      thing that may say `GATE OK`.
+    #
+    # Paths: the driver resolves its own data root (`--data-root` >
+    # SNOWBALL_DATA_ROOT > `.planning/data/sd`) and its own arabic plain-text
+    # directory (`--arabic-dir` > `<root>/arabic` > `build/data/arabic`).
+    # The stage only forwards an explicitly requested root, so the default
+    # run exercises exactly the driver's own resolution.  A forwarded path is
+    # converted to the form the native executable can open (`cygpath -w`
+    # under Git-Bash); nothing is hard-coded.
+    # ------------------------------------------------------------------
+
+    _g_start=$(date +%s)
+    : > "$GOLDEN_LOG" 2>/dev/null || true
+    : > "$GOLDEN_GATE_LOG" 2>/dev/null || true
+
+    if [ ! -f "$GOLDEN_GATE" ]; then
+        log_err "golden failed: the gate script is missing: $GOLDEN_GATE"
+        log_err "stage=golden exit=$EXIT_GOLDEN"
+        return "$EXIT_GOLDEN"
+    fi
+
+    # -- 1. the driver ---------------------------------------------------
+    if [ "$DATA_SRC" = default ]; then
+        ( cd "$MODULE_ROOT" && moon run cmd/golden ) >"$GOLDEN_LOG" 2>&1
+    else
+        _g_data="$DATA_ROOT_ABS"
+        if [ "$HOST" = git-bash ] && command -v cygpath >/dev/null 2>&1; then
+            _g_data=$(cygpath -w "$DATA_ROOT_ABS")
+        fi
+        ( cd "$MODULE_ROOT" && moon run cmd/golden --data-root "$_g_data" ) \
+            >"$GOLDEN_LOG" 2>&1
+    fi
+    _g_rc=$?
+    if [ "$_g_rc" -ne 0 ]; then
+        # The first stderr line is the driver's own diagnostic (absolute path
+        # + `missing`, a line-count mismatch, or a mismatch summary).
+        _g_first=$(sed -n 1p "$GOLDEN_LOG" 2>/dev/null)
+        log_err "golden failed: moon run cmd/golden exited $_g_rc: $_g_first"
+    fi
+
+    # -- 2. the gate -----------------------------------------------------
+    sh "$GOLDEN_GATE" "$GOLDEN_LOG" "$_g_rc" >"$GOLDEN_GATE_LOG" 2>&1
+    _g_gate_rc=$?
+    while IFS= read -r _g_line; do
+        log_line "gate: $_g_line"
+    done <"$GOLDEN_GATE_LOG"
+    if [ "$_g_gate_rc" -ne 0 ]; then
+        log_err "golden failed: scripts/gate.sh exited $_g_gate_rc (driver exit=$_g_rc)"
+        log_err "stage=golden exit=$EXIT_GOLDEN"
+        return "$EXIT_GOLDEN"
+    fi
+
+    _g_rows=$(grep -cE '^lang=[^ ]+ checked=[0-9]+ mismatch=0 ' "$GOLDEN_LOG" 2>/dev/null)
+    _g_now=$(date +%s)
+    log_line "stage=golden rows=$_g_rows mismatch=0 elapsed=$((_g_now - _g_start))"
+    log_line "GATE OK"
+    return 0
 }
 
 # run_stage <name> — dispatch one stage, return its exit code.

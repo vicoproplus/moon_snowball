@@ -1,7 +1,20 @@
 pkgtype(kind: "executable")
 
 import {
+  "vicoproplus/moon_snowball" @registry,
   "vicoproplus/moon_snowball/runtime" @rt,
+  "vicoproplus/moon_snowball/arabic" @arabic,
+  "vicoproplus/moon_snowball/dutch" @dutch,
+  "vicoproplus/moon_snowball/english" @english,
+  "vicoproplus/moon_snowball/french" @french,
+  "vicoproplus/moon_snowball/german" @german,
+  "vicoproplus/moon_snowball/italian" @italian,
+  "vicoproplus/moon_snowball/porter" @porter,
+  "vicoproplus/moon_snowball/porter311" @porter311,
+  "vicoproplus/moon_snowball/portuguese" @portuguese,
+  "vicoproplus/moon_snowball/russian" @russian,
+  "vicoproplus/moon_snowball/spanish" @spanish,
+  "vicoproplus/moon_snowball/turkish" @turkish,
   "moonbitlang/x/fs",
   "moonbitlang/core/env",
 }
