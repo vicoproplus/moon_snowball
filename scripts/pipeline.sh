@@ -2,7 +2,8 @@
 # scripts/pipeline.sh — the single entry point of the U2 translator pipeline.
 #
 # Usage:
-#   sh scripts/pipeline.sh [--data-root PATH] [--out PATH] [--vendor PATH] [--stage STAGE]
+#   sh scripts/pipeline.sh [--data-root PATH] [--out PATH] [--vendor PATH]
+#                          [--sb-root PATH] [--stage STAGE | --only STAGE]
 #
 # Six stages, fixed order, and the only legal `stage=` values in the log:
 #
@@ -13,21 +14,51 @@
 #     Without --stage the whole chain runs.  --stage is a dry-run / batching
 #     aid only; CI and the final acceptance always use the no-argument form.
 #
+# --only semantics: `--only=<s>` runs exactly that one stage.  It exists
+#     because a stage that is wired may still be preceded by a stage that is
+#     honestly red: --only lets a single stage be exercised without touching
+#     the other five.  --stage and --only are mutually exclusive.
+#
+# The generate stage (Task 3) runs the upstream Snowball 3.2.0 compiler.
+# The compiler is a Linux ELF, so the generation always happens inside WSL:
+# from the host the stage enters WSL exactly once per generation
+# (`wsl -e bash -lc '...'`, every path conversion done by wslpath); inside
+# WSL the stage calls tools/gen_all.sh directly and never calls wsl again.
+# It produces three directories — the deliverable output (out_root), plus
+# .planning/logs/u2/gen1 and .planning/logs/u2/gen2 — and then proves the
+# two claims the pipeline is allowed to make:
+#
+#     generated 11/11          gen1 and gen2 are byte-identical (the eleven
+#                              upstream languages, porter included)
+#     py32 covered 10/10 SAME  the ten vendored py32 stemmers are unchanged
+#
+# porter has no vendored py32 counterpart: its baseline is gen1 == gen2
+# only, and that is what the pipeline states.  The generation count never
+# includes the porter311 translation — that is a later task, and its number
+# is never written here.
+#
 # Log: .planning/logs/u2/T2-entry.log — one field per line.  The field
-#     vocabulary is stage=, lang=, file=, line=, exit=, elapsed=, plus the
-#     resolved-root lines "data_root=<abs> source=<flag|env|default>" and the
-#     host line "host=<git-bash|wsl>".  A stage opens with "stage=<name>"
+#     vocabulary is stage=, lang=, file=, line=, exit=, elapsed=, cmd=, plus
+#     the resolved-root lines "data_root=<abs> source=<flag|env|default>" and
+#     the host line "host=<git-bash|wsl>".  A stage opens with "stage=<name>"
 #     and closes with "stage=<name> exit=<code>".  No ANSI escape sequence
 #     is ever written, and stdin is never read.
 #
+# The generate stage keeps its own detail log in
+# .planning/logs/u2/T3-generate.log (truncated at the start of every
+# generate run, so it always describes the most recent run): the
+# per-language command lines and the two parity claims live there.  The
+# raw transcript of every generation is appended to T3-generate-raw.log.
+#
 # Exit codes:
-#     0  every selected stage succeeded (not reachable in Task 2 — the stage
-#        bodies are still honest-red)
-#     2  usage error (unknown flag, unknown --stage value) or a stage body
-#        that is not implemented yet
+#     0  every selected stage succeeded
+#     2  usage error (unknown flag, unknown --stage/--only value) or a stage
+#        body that is not implemented yet
 #     3  toolchain preflight failed (python / moon / gzip missing)
 #     4  path resolution failed (a flag or env var named a missing path)
 #     5  the wslpath round-trip probe failed
+#     6  the generate stage failed (compiler missing, WSL unreachable, a
+#        generation error, or a parity mismatch)
 #     other  the exit code of the first failing stage.  The run is fail-fast:
 #        a later stage is never entered after a failure.
 #
@@ -48,9 +79,10 @@
 #     output root build/gen is reported, not made.
 #
 # The printed roots are absolute in the running shell's own namespace: the
-#     POSIX form under Git-Bash, the WSL mount form inside WSL.  A stage that
-#     hands a root to a native Windows binary must convert it first (cygpath
-#     -w under Git-Bash) or run inside WSL.
+# POSIX form under Git-Bash, the WSL mount form inside WSL.  A root that
+# crosses the host -> WSL boundary must be converted with `wslpath -a -u`
+# (the host prints /f/..., WSL expects /mnt/f/...): the host->WSL
+# conversion is wslpath, never a hand-written prefix swap.
 
 set -u
 
@@ -66,7 +98,29 @@ EXIT_USAGE=2
 EXIT_TOOLCHAIN=3
 EXIT_PATH=4
 EXIT_PROBE=5
+EXIT_GENERATE=6
 
+
+# The generate stage (Task 3) has its own log: the per-language command
+# lines and the two parity claims live there.  It is truncated at the start
+# of every generate run, so it always describes the most recent run; the
+# raw transcript of every generation is appended to GENERATE_RAW_LOG.
+GENERATE_LOG="$LOG_ROOT/T3-generate.log"
+GENERATE_RAW_LOG="$LOG_ROOT/T3-generate-raw.log"
+
+# The two parity directories and the snapshot area.  The snapshot area
+# lives under .planning/logs/ (gitignored) and is *outside* every directory
+# the stage overwrites, so a copy can never end up inside a deliverable.
+# SNOWBALL_SNAPSHOT_ROOT relocates it (e.g. to a scratch drive); the copy
+# then lands in <root>/u2-t3-snapshot-<date>/<dir>.
+GEN1_ROOT="$LOG_ROOT/gen1"
+GEN2_ROOT="$LOG_ROOT/gen2"
+SNAPSHOT_ROOT="$LOG_ROOT/snapshot"
+
+# The eleven upstream languages (porter included) and the ten of them that
+# have a vendored py32 counterpart under tools/vendor/py32/.
+GEN_LANGS="arabic dutch english french german italian porter portuguese russian spanish turkish"
+PY32_LANGS="arabic dutch english french german italian portuguese russian spanish turkish"
 mkdir -p "$LOG_ROOT" 2>/dev/null || true
 # The run log is append-only: every run appends its own banner, probe result
 # and stage lines, so the evidence of both the host run and the WSL run
@@ -104,6 +158,24 @@ emit_header() {
     emit_root data_root "$DATA_ROOT_ABS" "$DATA_SRC"
     emit_root out_root "$OUT_ROOT_ABS" "$OUT_SRC"
     emit_root vendor_root "$VENDOR_ROOT_ABS" "$VENDOR_SRC"
+    emit_root sb_root "$SB_ROOT_ABS" "$SB_SRC"
+}
+
+# gen_log <text> — one line to the generate stage's own log.
+gen_log() {
+    printf '%s\n' "$*" >>"$GENERATE_LOG" 2>/dev/null || true
+}
+
+# gen_emit <text> — one line to stdout and to the generate stage's log.
+gen_emit() {
+    printf '%s\n' "$*"
+    gen_log "$*"
+}
+
+# gen_fail <text> — one line to stderr, the run log and the generate log.
+gen_fail() {
+    log_err "$*"
+    gen_log "$*"
 }
 
 # ---------------------------------------------------------------------------
@@ -145,9 +217,11 @@ require_existing() {
 }
 
 usage() {
-    printf '%s\n' "usage: sh scripts/pipeline.sh [--data-root PATH] [--out PATH] [--vendor PATH] [--stage STAGE]"
+    printf '%s\n' "usage: sh scripts/pipeline.sh [--data-root PATH] [--out PATH] [--vendor PATH] [--sb-root PATH] [--stage STAGE | --only STAGE]"
     printf '%s\n' "stages: $STAGES"
     printf '%s\n' "  --stage=<s> runs the stages up to and including <s> (default: all six)"
+    printf '%s\n' "  --only=<s>  runs exactly that one stage (mutually exclusive with --stage)"
+    printf '%s\n' "  --sb-root=<p> directory of the upstream Snowball compiler (default: .probe/ctc/sbtest)"
 }
 
 # ---------------------------------------------------------------------------
@@ -157,7 +231,9 @@ usage() {
 DATA_ROOT_ARG=""
 OUT_ROOT_ARG=""
 VENDOR_ROOT_ARG=""
+SB_ROOT_ARG=""
 STAGE_ARG=""
+ONLY_ARG=""
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -178,6 +254,18 @@ while [ "$#" -gt 0 ]; do
             shift
             [ "$#" -gt 0 ] || { log_err "--vendor needs a value"; exit "$EXIT_USAGE"; }
             VENDOR_ROOT_ARG="$1"
+            ;;
+        --sb-root=*) SB_ROOT_ARG="${1#--sb-root=}" ;;
+        --sb-root)
+            shift
+            [ "$#" -gt 0 ] || { log_err "--sb-root needs a value"; exit "$EXIT_USAGE"; }
+            SB_ROOT_ARG="$1"
+            ;;
+        --only=*) ONLY_ARG="${1#--only=}" ;;
+        --only)
+            shift
+            [ "$#" -gt 0 ] || { log_err "--only needs a value"; exit "$EXIT_USAGE"; }
+            ONLY_ARG="$1"
             ;;
         --stage=*) STAGE_ARG="${1#--stage=}" ;;
         --stage)
@@ -206,7 +294,25 @@ done
 # Stage selection — the six stage names are the single source of truth.
 # ---------------------------------------------------------------------------
 
-if [ -n "$STAGE_ARG" ]; then
+if [ -n "$STAGE_ARG" ] && [ -n "$ONLY_ARG" ]; then
+    log_err "--stage and --only are mutually exclusive"
+    exit "$EXIT_USAGE"
+fi
+
+if [ -n "$ONLY_ARG" ]; then
+    _found=0
+    for _s in $STAGES; do
+        if [ "$_s" = "$ONLY_ARG" ]; then
+            _found=1
+            break
+        fi
+    done
+    if [ "$_found" -ne 1 ]; then
+        log_err "unknown stage: $ONLY_ARG (expected one of: $STAGES)"
+        exit "$EXIT_USAGE"
+    fi
+    RUN_STAGES="$ONLY_ARG"
+elif [ -n "$STAGE_ARG" ]; then
     RUN_STAGES=""
     _found=0
     for _s in $STAGES; do
@@ -223,6 +329,16 @@ if [ -n "$STAGE_ARG" ]; then
 else
     RUN_STAGES="$STAGES"
 fi
+
+# stage_selected <name> — is <name> one of the stages this run enters?
+stage_selected() {
+    for _s in $RUN_STAGES; do
+        if [ "$_s" = "$1" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
 
 # ---------------------------------------------------------------------------
 # Host detection — inside WSL never call `wsl` again (prototype defect P1).
@@ -264,9 +380,24 @@ else
     VENDOR_VAL="$MODULE_ROOT/tools/vendor"
 fi
 
+# The upstream Snowball compiler directory: flag > env > module-relative
+# default (.probe/ctc/sbtest).  The default is resolved against the module
+# root, so the same three-way precedence as the other roots holds.
+if [ -n "$SB_ROOT_ARG" ]; then
+    SB_SRC=flag
+    SB_VAL="$SB_ROOT_ARG"
+elif [ -n "${SNOWBALL_SB_ROOT:-}" ]; then
+    SB_SRC=env
+    SB_VAL="$SNOWBALL_SB_ROOT"
+else
+    SB_SRC=default
+    SB_VAL="$MODULE_ROOT/.probe/ctc/sbtest"
+fi
+
 DATA_ROOT_ABS=$(abs_of "$DATA_VAL")
 OUT_ROOT_ABS=$(abs_of "$OUT_VAL")
 VENDOR_ROOT_ABS=$(abs_of "$VENDOR_VAL")
+SB_ROOT_ABS=$(abs_of "$SB_VAL")
 
 # A flag or env var that names a path which does not exist is fatal.
 case "$DATA_SRC" in
@@ -280,6 +411,11 @@ esac
 
 case "$VENDOR_SRC" in
     flag) require_existing "vendor_root (--vendor)" "$VENDOR_VAL" ;;
+esac
+
+case "$SB_SRC" in
+    flag) require_existing "sb_root (--sb-root)" "$SB_VAL" ;;
+    env) require_existing "sb_root (SNOWBALL_SB_ROOT)" "$SB_VAL" ;;
 esac
 
 # ---------------------------------------------------------------------------
@@ -447,8 +583,171 @@ stage_unpack() {
 }
 
 stage_generate() {
-    log_err "generate is not implemented: Task 3 wires the Snowball generator (tools/gen_all.sh)."
-    return 2
+    # ------------------------------------------------------------------
+    # Task 3 - the Snowball generator.
+    #
+    # Three generations, one per target directory:
+    #
+    #     gen1  -> $GEN1_ROOT     parity baseline A
+    #     gen2  -> $GEN2_ROOT     parity baseline B
+    #     out   -> $OUT_ROOT_ABS  the deliverable copy
+    #
+    # and the two claims the pipeline is allowed to make afterwards:
+    #
+    #     generated 11/11          gen1 and gen2 are byte-identical
+    #     py32 covered 10/10 SAME  the ten vendored py32 stemmers are
+    #                               byte-identical to gen1
+    #
+    # porter has no vendored py32 counterpart: its baseline is gen1 vs
+    # gen2 only, and that is what the log says.
+    #
+    # The upstream compiler is a Linux ELF, so every generation happens
+    # inside WSL: from the host the stage enters WSL exactly once per
+    # generation (wsl -e bash -lc '...'), inside WSL it calls
+    # tools/gen_all.sh directly and never calls wsl again.
+    # ------------------------------------------------------------------
+
+    # The detail log describes the most recent run only.
+    : > "$GENERATE_LOG" 2>/dev/null || true
+
+    GEN_SNAPSHOT_DATE=$(date +%Y%m%d-%H%M%S)
+
+    # -- 1. snapshot (the destructive-op precondition) ------------------
+    # Every directory the stage overwrites is copied into the snapshot
+    # area first, and the copy is confirmed before anything is written.
+    # The snapshot area lives outside every directory the stage writes,
+    # so a copy can never end up inside a deliverable.
+    _gen_preserved=0
+    for _gen_pair in "out_root=$OUT_ROOT_ABS" "gen1=$GEN1_ROOT" "gen2=$GEN2_ROOT"; do
+        _gen_tag=${_gen_pair%%=*}
+        _gen_dir=${_gen_pair#*=}
+        [ -d "$_gen_dir" ] || continue
+        _gen_snap="$SNAPSHOT_ROOT/$_gen_tag-$GEN_SNAPSHOT_DATE"
+        mkdir -p "$SNAPSHOT_ROOT" 2>/dev/null || true
+        if ! cp -r "$_gen_dir" "$_gen_snap" 2>/dev/null; then
+            gen_fail "generate failed: cannot snapshot $_gen_dir into $_gen_snap"
+            return "$EXIT_GENERATE"
+        fi
+        if [ ! -d "$_gen_snap" ]; then
+            gen_fail "generate failed: the snapshot copy $_gen_snap does not exist"
+            return "$EXIT_GENERATE"
+        fi
+        log_line "snapshot: preserved $_gen_dir -> $_gen_snap"
+        _gen_preserved=1
+    done
+    if [ "$_gen_preserved" -eq 0 ]; then
+        log_line "snapshot: nothing to preserve"
+    fi
+
+    # -- 2. path conversion --------------------------------------------
+    # The four roots as WSL paths.  From the host the conversion runs
+    # inside WSL (wslpath is not on the host PATH): cygpath gives the
+    # Windows side, wslpath -a -u the Unix side.  A host-namespace
+    # /f/... path is never handed to WSL.  Inside WSL the roots already
+    # are WSL paths, so wslpath is not called again.
+    if [ "$HOST" != wsl ] && ! command -v cygpath >/dev/null 2>&1; then
+        gen_fail "generate failed: cannot convert the roots to WSL paths: no cygpath on the host (gcc/make hint: the upstream compiler is a Linux ELF and must be built/run inside WSL)"
+        return "$EXIT_GENERATE"
+    fi
+    if [ "$HOST" = wsl ]; then
+        _gen_paths="$SB_ROOT_ABS
+$OUT_ROOT_ABS
+$GEN1_ROOT
+$GEN2_ROOT"
+    else
+        _gen_paths=$(
+            for _gen_p in "$SB_ROOT_ABS" "$OUT_ROOT_ABS" "$GEN1_ROOT" "$GEN2_ROOT"; do
+                _gen_win=$(cygpath -w "$_gen_p" 2>/dev/null) || _gen_win=""
+                printf '%s\n' "$_gen_win"
+            done | wsl -e bash -lc 'while IFS= read -r p; do u=$(wslpath -a -u "$p" 2>/dev/null) || u=""; printf "%s\n" "$u"; done' | tr -d "\r"
+        )
+    fi
+    _gen_sb_unix=$(printf '%s\n' "$_gen_paths" | sed -n 1p)
+    _gen_out_unix=$(printf '%s\n' "$_gen_paths" | sed -n 2p)
+    _gen_gen1_unix=$(printf '%s\n' "$_gen_paths" | sed -n 3p)
+    _gen_gen2_unix=$(printf '%s\n' "$_gen_paths" | sed -n 4p)
+    for _gen_check in "sb_root=$_gen_sb_unix" "out_root=$_gen_out_unix" "gen1_root=$_gen_gen1_unix" "gen2_root=$_gen_gen2_unix"; do
+        _gen_label=${_gen_check%%=*}
+        _gen_value=${_gen_check#*=}
+        case "$_gen_value" in
+            /*) : ;;
+            *)
+                gen_fail "generate failed: cannot convert $_gen_label to a WSL path (gcc/make hint: the upstream compiler is a Linux ELF and must be built/run inside WSL)"
+                return "$EXIT_GENERATE"
+                ;;
+        esac
+    done
+
+    # -- 3. the three generations ---------------------------------------
+    # The generation runs inside WSL.  From the host the stage enters
+    # WSL exactly once per generation; inside WSL it calls
+    # tools/gen_all.sh directly and never calls wsl again (that
+    # self-nesting is what produced exit 127).
+    gen_exec() {
+        if [ "$HOST" = wsl ]; then
+            ( cd "$MODULE_ROOT" && sh "$MODULE_ROOT/tools/gen_all.sh" "$_gen_sb_unix" "$1" )
+        else
+            # MSYS_NO_PATHCONV=1: the MSYS runtime would otherwise rewrite
+            # the /mnt/... arguments into a Windows path (that is what
+            # produced "D:/Program Files/Git/mnt/f/..."), and the WSL
+            # side must see the Unix path verbatim.  MSYS2_ARG_CONV_EXCL
+            # is the same switch for the MSYS2 runtime.
+            ( cd "$MODULE_ROOT" && MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' wsl -e bash -lc 'cd "$(wslpath -a -u .)" && sh tools/gen_all.sh "$1" "$2"' _ "$_gen_sb_unix" "$1" )
+        fi
+    }
+    : > "$GENERATE_RAW_LOG" 2>/dev/null || true
+    for _gen_target in "gen1=$_gen_gen1_unix" "gen2=$_gen_gen2_unix" "out=$_gen_out_unix"; do
+        _gen_tag=${_gen_target%%=*}
+        _gen_dest=${_gen_target#*=}
+        printf '=== generation %s -> %s\n' "$_gen_tag" "$_gen_dest" >> "$GENERATE_RAW_LOG" 2>/dev/null || true
+        gen_exec "$_gen_dest" >> "$GENERATE_RAW_LOG" 2>&1
+        _gen_rc=$?
+        if [ "$_gen_rc" -ne 0 ]; then
+            gen_fail "generate failed: the $_gen_tag generation failed (exit=$_gen_rc) (gcc/make hint: the upstream Snowball compiler is a Linux ELF, it must be built and run inside WSL - wsl/gcc/make)"
+            tail -n 20 "$GENERATE_RAW_LOG" 2>/dev/null
+            return "$EXIT_GENERATE"
+        fi
+        if [ "$_gen_tag" = "gen1" ]; then
+            # The per-language command lines, derived from the very same
+            # variables the generator was called with, so they cannot
+            # drift from what actually ran.
+            for _gen_lang in $GEN_LANGS; do
+                gen_emit "stage=generate lang=$_gen_lang cmd=$_gen_sb_unix/snowball $_gen_sb_unix/algorithms/$_gen_lang.sbl -python -eprefix _ -o $_gen_gen1_unix/${_gen_lang}_stemmer.py"
+            done
+        fi
+    done
+
+    # -- 4. parity ------------------------------------------------------
+    # gen1 against gen2 for the eleven upstream languages, and gen1
+    # against the vendored py32 stemmers for the ten that have one.
+    _gen_same=0
+    for _gen_lang in $GEN_LANGS; do
+        if cmp -s "$GEN1_ROOT/${_gen_lang}_stemmer.py" "$GEN2_ROOT/${_gen_lang}_stemmer.py"; then
+            _gen_same=$((_gen_same + 1))
+        else
+            gen_fail "generate failed: $_gen_lang differs (gen1 vs gen2)"
+            gen_fail "generate failed: differing files: $GEN1_ROOT/${_gen_lang}_stemmer.py $GEN2_ROOT/${_gen_lang}_stemmer.py"
+            return "$EXIT_GENERATE"
+        fi
+    done
+    if [ "$_gen_same" -eq 11 ]; then
+        gen_emit "generated $_gen_same/11"
+    fi
+    _gen_py32=0
+    for _gen_lang in $PY32_LANGS; do
+        if cmp -s "$GEN1_ROOT/${_gen_lang}_stemmer.py" "$VENDOR_ROOT_ABS/py32/${_gen_lang}_stemmer.py"; then
+            _gen_py32=$((_gen_py32 + 1))
+        else
+            gen_fail "generate failed: $_gen_lang differs (gen1 vs the vendored py32 stemmer)"
+            gen_fail "generate failed: differing files: $GEN1_ROOT/${_gen_lang}_stemmer.py $VENDOR_ROOT_ABS/py32/${_gen_lang}_stemmer.py"
+            return "$EXIT_GENERATE"
+        fi
+    done
+    if [ "$_gen_py32" -eq 10 ]; then
+        gen_emit "py32 covered $_gen_py32/10 SAME"
+    fi
+    gen_emit "porter: no vendored py32 counterpart; its baseline is gen1 vs gen2 only (it is part of the 11/11 claim, never of the py32 count)"
+    return 0
 }
 
 stage_translate() {
