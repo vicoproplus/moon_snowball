@@ -18,6 +18,7 @@
 #     because a stage that is wired may still be preceded by a stage that is
 #     honestly red: --only lets a single stage be exercised without touching
 #     the other five.  --stage and --only are mutually exclusive.
+#     An empty `--only=` is a usage error (exit 2), never "all six".
 #
 # The generate stage (Task 3) runs the upstream Snowball 3.2.0 compiler.
 # The compiler is a Linux ELF, so the generation always happens inside WSL:
@@ -119,6 +120,15 @@
 # crosses the host -> WSL boundary must be converted with `wslpath -a -u`
 # (the host prints /f/..., WSL expects /mnt/f/...): the host->WSL
 # conversion is wslpath, never a hand-written prefix swap.
+#
+# FR-22 (no absolute paths in the delivered scripts) is audited with a grep
+# for Windows-style absolute paths over scripts/, tools/ and cmd/golden/.
+# That audit MUST exclude tools/__pycache__ (GNU grep: --exclude-dir=__pycache__;
+# a plain directory walk is not enough): running any python helper writes .pyc
+# files there that embed the absolute source path, so a naive grep reports
+# build residue as if it were source.  .gitignore ignores *.pyc, but the audit
+# walks the working tree and does not consult it.  This comment deliberately
+# spells no audit pattern, so it cannot match its own audit.
 
 set -u
 
@@ -152,11 +162,8 @@ GENERATE_RAW_LOG="$LOG_ROOT/T3-generate-raw.log"
 # raise-count assertions that follow the translations.
 TRANSLATE_LOG="$LOG_ROOT/T4-translate.log"
 
-# Where the translate stage snapshots an existing deliverable directory
-# before overwriting it.  Outside the module by default so a copy can never
-# land inside the tree it is copying; SNOWBALL_T4_SNAPSHOT_ROOT relocates it.
+# The translate stage's raw transcript (its detail log is TRANSLATE_LOG).
 TRANSLATE_RAW_LOG="$LOG_ROOT/T4-translate-raw.log"
-TR_SNAPSHOT_ROOT="${SNOWBALL_T4_SNAPSHOT_ROOT:-$LOG_ROOT/snapshot}"
 
 # The fmt stage (Task 5) keeps its own detail log, truncated at the start of
 # every fmt run: the command line, one line per deliverable (file, post-fmt
@@ -169,10 +176,7 @@ FMT_MD5_B="$LOG_ROOT/T5-md5-b.txt"
 FMT_LINES_A="$LOG_ROOT/T5-lines-a.txt"
 FMT_LINES_B="$LOG_ROOT/T5-lines-b.txt"
 
-# Where the fmt stage snapshots the deliverables before rewriting them.
-# Outside the module by default (under the gitignored log root);
-# SNOWBALL_T5_SNAPSHOT_ROOT relocates it, e.g. to F:/Temp.
-T5_SNAPSHOT_ROOT="${SNOWBALL_T5_SNAPSHOT_ROOT:-$LOG_ROOT/snapshot}"
+# (The fmt stage snapshots through the shared snapshot_root helper below.)
 
 # The unpack stage (Task 8) materialises the arabic golden corpus.  Its detail
 # log is appended to by tools/unpack_arabic.sh, so one file holds the evidence
@@ -192,14 +196,14 @@ CORPUS_OPTIONAL="dutch_porter"
 CORPUS_URL="${SNOWBALL_CORPUS_URL:-https://github.com/snowballstem/snowball-data}"
 
 
-# The two parity directories and the snapshot area.  The snapshot area
-# lives under .planning/logs/ (gitignored) and is *outside* every directory
-# the stage overwrites, so a copy can never end up inside a deliverable.
-# SNOWBALL_SNAPSHOT_ROOT relocates it (e.g. to a scratch drive); the copy
-# then lands in <root>/u2-t3-snapshot-<date>/<dir>.
+# The two parity directories.  Snapshots go through the shared
+# snapshot_root helper below, which resolves
+# ${SNOWBALL_SNAPSHOT_ROOT:-$LOG_ROOT/snapshot} for every stage (T3, T4, T5,
+# T8).  The default is inside the module but under .planning/logs/, which is
+# gitignored; set SNOWBALL_SNAPSHOT_ROOT to relocate it outside the tree.
 GEN1_ROOT="$LOG_ROOT/gen1"
 GEN2_ROOT="$LOG_ROOT/gen2"
-SNAPSHOT_ROOT="$LOG_ROOT/snapshot"
+SNAPSHOT_BASE="${SNOWBALL_SNAPSHOT_ROOT:-$LOG_ROOT/snapshot}"
 
 # The eleven upstream languages (porter included) and the ten of them that
 # have a vendored py32 counterpart under tools/vendor/py32/.
@@ -288,38 +292,115 @@ gen_fail() {
 }
 
 # ---------------------------------------------------------------------------
+# Snapshot area — one resolution rule for every stage that copies a directory
+# out of the way before rewriting it.
+# ---------------------------------------------------------------------------
+
+# snapshot_root <tag> — the directory this run snapshots into, as an absolute
+# path: ${SNOWBALL_SNAPSHOT_ROOT:-$LOG_ROOT/snapshot}/<tag>-<date>.  The tag
+# carries the stage (u2-t3, u2-t4, u2-t5, u2-t8).  A same-second re-run would
+# otherwise nest the new copy inside the previous one, so an existing target
+# gets a numeric suffix.  The directory is NOT created here: the caller makes
+# it and reports the failure if it cannot.
+snapshot_root() {
+    _sr_tag="$1"
+    _sr_base="$SNAPSHOT_BASE"
+    case "$_sr_base" in
+        /*) ;;
+        *) _sr_base=$(abs_of "$_sr_base" "SNOWBALL_SNAPSHOT_ROOT") || return 1 ;;
+    esac
+    _sr_dir="$_sr_base/$_sr_tag-$(date +%Y%m%d-%H%M%S)"
+    _sr_n=1
+    while [ -e "$_sr_dir" ]; do
+        _sr_dir="$_sr_base/$_sr_tag-$(date +%Y%m%d-%H%M%S)-$_sr_n"
+        _sr_n=$((_sr_n + 1))
+    done
+    printf '%s\n' "$_sr_dir"
+}
+
+# ---------------------------------------------------------------------------
 # Small path helpers
 # ---------------------------------------------------------------------------
 
-# abs_of <path> — absolute form of <path>, even when it does not exist.
+# The invocation directory in POSIX form.  `$PWD` is not reliable for this:
+# under Git-Bash it can carry the Windows form (F:\...) while `pwd -P`
+# returns the POSIX form (/f/...).  Every relative input is resolved against
+# this value, so a printed result is absolute in the running namespace.
+CWD_POSIX=$(pwd -P 2>/dev/null) || CWD_POSIX=""
+case "$CWD_POSIX" in
+    /*) ;;
+    *) CWD_POSIX="" ;;
+esac
+
+# abs_of <path> <label> — absolute POSIX form of <path>, even when it does
+# not exist.  The result ALWAYS starts with "/":
+#
+#   * a Windows drive path (X:\... or X:/...) is converted with cygpath -u
+#     when cygpath is available, and refused with a message naming <label>
+#     when it is not (the shell cannot address it otherwise);
+#   * a path that is not absolute is prefixed with the POSIX invocation
+#     directory, so a diagnostic never prints a bare relative path;
+#   * the longest existing prefix is canonicalised with pwd -P.
+#
+# Failure (unconvertible drive path, no POSIX invocation directory) prints one
+# diagnostic to stderr naming <label> and returns 1 with nothing on stdout.
 abs_of() {
     _p="$1"
+    _label="${2:-path}"
     case "$_p" in
         */) _p="${_p%/}" ;;
     esac
     [ -n "$_p" ] || _p="/"
+    case "$_p" in
+        [A-Za-z]:\\*|[A-Za-z]:/*)
+            if command -v cygpath >/dev/null 2>&1; then
+                _conv=$(cygpath -u "$_p" 2>/dev/null) || _conv=""
+                if [ -z "$_conv" ]; then
+                    log_err "$_label: cannot convert the Windows path to a POSIX path: $_p"
+                    return 1
+                fi
+                _p="$_conv"
+            else
+                log_err "$_label: the Windows path cannot be used in this shell and cygpath is not available to convert it: $_p"
+                return 1
+            fi
+            ;;
+    esac
+    case "$_p" in
+        /*) ;;
+        *)
+            if [ -z "$CWD_POSIX" ]; then
+                log_err "$_label: cannot resolve the relative path $_p (the invocation directory has no POSIX form)"
+                return 1
+            fi
+            _p="$CWD_POSIX/$_p"
+            ;;
+    esac
     _dir=$(dirname "$_p")
     _base=$(basename "$_p")
     _adir=$(cd "$_dir" 2>/dev/null && pwd -P) || _adir=""
     if [ -z "$_adir" ]; then
+        # The parent does not exist yet, but the value is still absolute.
         printf '%s\n' "$_p"
     elif [ "$_adir" = "/" ]; then
-        printf '%s\n' "$_adir$_base"
+        printf '/%s\n' "$_base"
     else
-        printf '%s\n' "$_adir/$_base"
+        printf '%s/%s\n' "$_adir" "$_base"
     fi
 }
 
 # require_existing <param label> <path> — hard gate for flag/env roots.
-# The message names the parameter and the resolved absolute path.
+# The message names the parameter and the resolved absolute path; the value
+# printed is the already-resolved $..._ABS, which always starts with "/".
 require_existing() {
+    _re_abs=$(abs_of "$2" "$1") || _re_abs="$2"
     if [ ! -e "$2" ]; then
-        log_err "$1 does not exist: $2 (resolved: $(abs_of "$2"))"
+        log_err "$1 does not exist: $2 (resolved: $_re_abs)"
         emit_header
         exit "$EXIT_PATH"
     fi
     if [ ! -d "$2" ]; then
-        log_err "$1 is not a directory: $2 (resolved: $(abs_of "$2"))"
+        log_err "$1 is not a directory: $2 (resolved: $_re_abs)"
         emit_header
         exit "$EXIT_PATH"
     fi
@@ -343,6 +424,7 @@ VENDOR_ROOT_ARG=""
 SB_ROOT_ARG=""
 STAGE_ARG=""
 ONLY_ARG=""
+ONLY_SET=0
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -370,10 +452,14 @@ while [ "$#" -gt 0 ]; do
             [ "$#" -gt 0 ] || { log_err "--sb-root needs a value"; exit "$EXIT_USAGE"; }
             SB_ROOT_ARG="$1"
             ;;
-        --only=*) ONLY_ARG="${1#--only=}" ;;
+        --only=*)
+            ONLY_SET=1
+            ONLY_ARG="${1#--only=}"
+            ;;
         --only)
             shift
             [ "$#" -gt 0 ] || { log_err "--only needs a value"; exit "$EXIT_USAGE"; }
+            ONLY_SET=1
             ONLY_ARG="$1"
             ;;
         --stage=*) STAGE_ARG="${1#--stage=}" ;;
@@ -403,12 +489,14 @@ done
 # Stage selection — the six stage names are the single source of truth.
 # ---------------------------------------------------------------------------
 
-if [ -n "$STAGE_ARG" ] && [ -n "$ONLY_ARG" ]; then
-    log_err "--stage and --only are mutually exclusive"
+# An empty --only value is a usage error, not "all six": it is almost always
+# a shell-variable typo, and silently running everything hides it.
+if [ "$ONLY_SET" -eq 1 ] && [ -z "$ONLY_ARG" ]; then
+    log_err "--only needs a stage name (expected one of: $STAGES)"
     exit "$EXIT_USAGE"
 fi
 
-if [ -n "$ONLY_ARG" ]; then
+if [ "$ONLY_SET" -eq 1 ]; then
     _found=0
     for _s in $STAGES; do
         if [ "$_s" = "$ONLY_ARG" ]; then
@@ -439,15 +527,9 @@ else
     RUN_STAGES="$STAGES"
 fi
 
-# stage_selected <name> — is <name> one of the stages this run enters?
-stage_selected() {
-    for _s in $RUN_STAGES; do
-        if [ "$_s" = "$1" ]; then
-            return 0
-        fi
-    done
-    return 1
-}
+# (The old stage_selected() helper was dead: every stage is entered only from
+# the dispatcher loop over $RUN_STAGES, so it was removed rather than left as
+# a second, unenforced source of truth.)
 
 # ---------------------------------------------------------------------------
 # Host detection — inside WSL never call `wsl` again (prototype defect P1).
@@ -503,10 +585,31 @@ else
     SB_VAL="$MODULE_ROOT/.probe/ctc/sbtest"
 fi
 
-DATA_ROOT_ABS=$(abs_of "$DATA_VAL")
-OUT_ROOT_ABS=$(abs_of "$OUT_VAL")
-VENDOR_ROOT_ABS=$(abs_of "$VENDOR_VAL")
-SB_ROOT_ABS=$(abs_of "$SB_VAL")
+# Each root is resolved with its parameter named, so a path this shell cannot
+# address (an unconvertible Windows path) fails with exit 4 naming the
+# parameter instead of printing a relative or Windows-form value.
+case "$DATA_SRC" in
+    flag) _root_label="data_root (--data-root)" ;;
+    env) _root_label="data_root (SNOWBALL_DATA_ROOT)" ;;
+    *) _root_label="data_root" ;;
+esac
+DATA_ROOT_ABS=$(abs_of "$DATA_VAL" "$_root_label") || exit "$EXIT_PATH"
+case "$OUT_SRC" in
+    flag) _root_label="out_root (--out)" ;;
+    *) _root_label="out_root" ;;
+esac
+OUT_ROOT_ABS=$(abs_of "$OUT_VAL" "$_root_label") || exit "$EXIT_PATH"
+case "$VENDOR_SRC" in
+    flag) _root_label="vendor_root (--vendor)" ;;
+    *) _root_label="vendor_root" ;;
+esac
+VENDOR_ROOT_ABS=$(abs_of "$VENDOR_VAL" "$_root_label") || exit "$EXIT_PATH"
+case "$SB_SRC" in
+    flag) _root_label="sb_root (--sb-root)" ;;
+    env) _root_label="sb_root (SNOWBALL_SB_ROOT)" ;;
+    *) _root_label="sb_root" ;;
+esac
+SB_ROOT_ABS=$(abs_of "$SB_VAL" "$_root_label") || exit "$EXIT_PATH"
 
 # A flag or env var that names a path which does not exist is fatal.
 case "$DATA_SRC" in
@@ -728,15 +831,26 @@ stage_unpack() {
         up_log "$*"
     }
 
-    # corpus_complete — every delivery input has a voc and an output side,
-    # plain or gzipped (arabic is the only language shipped gzipped).
+    # corpus_complete — every delivery input has a voc and an output side.
+    # Only arabic may be gzipped: for the other ten the gzipped name is not
+    # accepted, so a plain-looking root with a stray .gz cannot pass as
+    # complete.
     corpus_complete() {
         for _cc_lang in $CORPUS_LANGS; do
-            if [ ! -f "$DATA_ROOT_ABS/$_cc_lang/voc.txt" ] && [ ! -f "$DATA_ROOT_ABS/$_cc_lang/voc.txt.gz" ]; then
-                return 1
-            fi
-            if [ ! -f "$DATA_ROOT_ABS/$_cc_lang/output.txt" ] && [ ! -f "$DATA_ROOT_ABS/$_cc_lang/output.txt.gz" ]; then
-                return 1
+            if [ "$_cc_lang" = arabic ]; then
+                if [ ! -f "$DATA_ROOT_ABS/$_cc_lang/voc.txt" ] && [ ! -f "$DATA_ROOT_ABS/$_cc_lang/voc.txt.gz" ]; then
+                    return 1
+                fi
+                if [ ! -f "$DATA_ROOT_ABS/$_cc_lang/output.txt" ] && [ ! -f "$DATA_ROOT_ABS/$_cc_lang/output.txt.gz" ]; then
+                    return 1
+                fi
+            else
+                if [ ! -f "$DATA_ROOT_ABS/$_cc_lang/voc.txt" ]; then
+                    return 1
+                fi
+                if [ ! -f "$DATA_ROOT_ABS/$_cc_lang/output.txt" ]; then
+                    return 1
+                fi
             fi
         done
         return 0
@@ -765,27 +879,31 @@ stage_unpack() {
         [ -n "$_up_git_version" ] || { _up_git_major=0; _up_git_minor=0; }
         up_emit "corpus_git_version=${_up_git_version:-unknown}"
 
-        # git refuses to clone into a non-empty directory, so a root that
-        # exists without being a clone cannot be fetched into: say so
-        # instead of failing obscurely.
+        # git refuses to clone into a non-empty directory.  A root that is
+        # already a clone is therefore resumed rather than re-cloned: the
+        # clone step is skipped and only the sparse set is re-applied, so an
+        # interrupted fetch continues where it stopped (0b is re-entrant).
         _up_parent=$(dirname "$DATA_ROOT_ABS")
         mkdir -p "$_up_parent" 2>/dev/null || true
-        if [ -d "$DATA_ROOT_ABS" ] && [ ! -d "$DATA_ROOT_ABS/.git" ]; then
-            up_fail "corpus-clone-failed: $DATA_ROOT_ABS exists but is not a git clone and does not hold a complete corpus; move it away or set SNOWBALL_DATA_ROOT to a complete copy"
-            return "$EXIT_UNPACK"
-        fi
-
-        if [ "$_up_git_major" -gt 2 ] || { [ "$_up_git_major" -eq 2 ] && [ "$_up_git_minor" -ge 19 ]; }; then
-            up_emit "corpus_fetch=partial-clone filter=blob:none sparse=1"
-            if ! git clone --depth 1 --filter=blob:none --sparse "$CORPUS_URL" "$DATA_ROOT_ABS" >>"$CORPUS_LOG" 2>&1; then
-                up_fail "corpus-clone-failed: git clone --filter=blob:none --sparse $CORPUS_URL $DATA_ROOT_ABS failed; if this machine already has the corpus, set SNOWBALL_DATA_ROOT to point at it, or set SNOWBALL_CORPUS_URL to a reachable mirror"
+        if [ -d "$DATA_ROOT_ABS/.git" ]; then
+            up_emit "corpus_fetch=resumed root=$DATA_ROOT_ABS"
+        else
+            if [ -d "$DATA_ROOT_ABS" ]; then
+                up_fail "corpus-clone-failed: $DATA_ROOT_ABS exists but is not a git clone and does not hold a complete corpus; move it away or set SNOWBALL_DATA_ROOT to a complete copy"
                 return "$EXIT_UNPACK"
             fi
-        else
-            up_emit "corpus_fetch=depth-1-clone filter=none (git $_up_git_version < 2.19, --filter unsupported)"
-            if ! git clone --depth 1 "$CORPUS_URL" "$DATA_ROOT_ABS" >>"$CORPUS_LOG" 2>&1; then
-                up_fail "corpus-clone-failed: git clone --depth 1 $CORPUS_URL $DATA_ROOT_ABS failed; if this machine already has the corpus, set SNOWBALL_DATA_ROOT to point at it, or set SNOWBALL_CORPUS_URL to a reachable mirror"
-                return "$EXIT_UNPACK"
+            if [ "$_up_git_major" -gt 2 ] || { [ "$_up_git_major" -eq 2 ] && [ "$_up_git_minor" -ge 19 ]; }; then
+                up_emit "corpus_fetch=partial-clone filter=blob:none sparse=1"
+                if ! git clone --depth 1 --filter=blob:none --sparse "$CORPUS_URL" "$DATA_ROOT_ABS" >>"$CORPUS_LOG" 2>&1; then
+                    up_fail "corpus-clone-failed: git clone --filter=blob:none --sparse $CORPUS_URL $DATA_ROOT_ABS failed; if this machine already has the corpus, set SNOWBALL_DATA_ROOT to point at it, or set SNOWBALL_CORPUS_URL to a reachable mirror"
+                    return "$EXIT_UNPACK"
+                fi
+            else
+                up_emit "corpus_fetch=depth-1-clone filter=none (git $_up_git_version < 2.19, --filter unsupported)"
+                if ! git clone --depth 1 "$CORPUS_URL" "$DATA_ROOT_ABS" >>"$CORPUS_LOG" 2>&1; then
+                    up_fail "corpus-clone-failed: git clone --depth 1 $CORPUS_URL $DATA_ROOT_ABS failed; if this machine already has the corpus, set SNOWBALL_DATA_ROOT to point at it, or set SNOWBALL_CORPUS_URL to a reachable mirror"
+                    return "$EXIT_UNPACK"
+                fi
             fi
         fi
 
@@ -801,11 +919,17 @@ stage_unpack() {
     if ! corpus_complete; then
         _up_missing=""
         for _up_lang in $CORPUS_LANGS; do
-            if [ ! -f "$DATA_ROOT_ABS/$_up_lang/voc.txt" ] && [ ! -f "$DATA_ROOT_ABS/$_up_lang/voc.txt.gz" ]; then
-                _up_missing="$_up_missing $_up_lang(voc)"
-            elif [ ! -f "$DATA_ROOT_ABS/$_up_lang/output.txt" ] && [ ! -f "$DATA_ROOT_ABS/$_up_lang/output.txt.gz" ]; then
-                _up_missing="$_up_missing $_up_lang(output)"
+            _up_voc_ok=0
+            _up_out_ok=0
+            if [ "$_up_lang" = arabic ]; then
+                { [ -f "$DATA_ROOT_ABS/$_up_lang/voc.txt" ] || [ -f "$DATA_ROOT_ABS/$_up_lang/voc.txt.gz" ]; } && _up_voc_ok=1
+                { [ -f "$DATA_ROOT_ABS/$_up_lang/output.txt" ] || [ -f "$DATA_ROOT_ABS/$_up_lang/output.txt.gz" ]; } && _up_out_ok=1
+            else
+                [ -f "$DATA_ROOT_ABS/$_up_lang/voc.txt" ] && _up_voc_ok=1
+                [ -f "$DATA_ROOT_ABS/$_up_lang/output.txt" ] && _up_out_ok=1
             fi
+            [ "$_up_voc_ok" -eq 1 ] || _up_missing="$_up_missing $_up_lang(voc)"
+            [ "$_up_out_ok" -eq 1 ] || _up_missing="$_up_missing $_up_lang(output)"
         done
         up_fail "MISSING corpus after fetch:$_up_missing (root=$DATA_ROOT_ABS); set SNOWBALL_DATA_ROOT to an existing corpus copy"
         return "$EXIT_UNPACK"
@@ -820,16 +944,34 @@ stage_unpack() {
     up_emit "corpus_du=${_up_du:-unknown}"
 
     # -- 1. snapshot (the destructive-op precondition) ------------------
-    UP_SNAPSHOT_DATE=$(date +%Y%m%d-%H%M%S)
+    # Same resolution rule as the other stages: SNOWBALL_SNAPSHOT_ROOT is
+    # honoured here too, and the u2-t8-* snapshots are pruned to the two most
+    # recent so a repeated run cannot fill the snapshot area with copies of
+    # the same decompressed corpus.
     if [ -d "$UNPACK_DST" ]; then
-        _up_snap="$SNAPSHOT_ROOT/u2-t8-$UP_SNAPSHOT_DATE"
-        mkdir -p "$SNAPSHOT_ROOT" 2>/dev/null || true
+        _up_snap=$(snapshot_root "u2-t8") || {
+            up_fail "unpack failed: cannot resolve the snapshot directory (SNOWBALL_SNAPSHOT_ROOT=$SNAPSHOT_BASE)"
+            return "$EXIT_UNPACK"
+        }
+        mkdir -p "$_up_snap" 2>/dev/null || true
         if ! cp -r "$UNPACK_DST" "$_up_snap" 2>/dev/null || [ ! -d "$_up_snap" ]; then
             up_fail "unpack failed: cannot snapshot $UNPACK_DST into $_up_snap"
             return "$EXIT_UNPACK"
         fi
         log_line "snapshot: preserved $UNPACK_DST -> $_up_snap"
         up_emit "snapshot=$_up_snap"
+        # Keep the two most recent u2-t8-* snapshots, drop the older ones.
+        # The list is newest-first, the snapshot just made is always first,
+        # and only existing directories are removed.
+        _up_kept=0
+        for _up_old in $(ls -d "$SNAPSHOT_BASE"/u2-t8-* 2>/dev/null | sort -r); do
+            [ -d "$_up_old" ] || continue
+            _up_kept=$((_up_kept + 1))
+            if [ "$_up_kept" -gt 2 ]; then
+                rm -rf "$_up_old" 2>/dev/null || true
+            fi
+        done
+        up_emit "snapshot_prune=keep-2 newest=$_up_snap root=$SNAPSHOT_BASE"
     else
         log_line "snapshot: nothing to preserve ($UNPACK_DST does not exist)"
         up_emit "snapshot=none ($UNPACK_DST absent)"
@@ -919,20 +1061,22 @@ stage_generate() {
     gen_emit "stage=generate lang=porter311 source=vendored-3.1.1 file=$_gen_vend md5=$_gen_vend_md5"
     gen_emit "vendored input 1/1 md5 unchanged"
 
-    GEN_SNAPSHOT_DATE=$(date +%Y%m%d-%H%M%S)
-
     # -- 1. snapshot (the destructive-op precondition) ------------------
     # Every directory the stage overwrites is copied into the snapshot
     # area first, and the copy is confirmed before anything is written.
-    # The snapshot area lives outside every directory the stage writes,
-    # so a copy can never end up inside a deliverable.
+    # The snapshot area is resolved by snapshot_root (SNOWBALL_SNAPSHOT_ROOT
+    # honoured for this stage too) and is never inside a directory the stage
+    # writes, so a copy can never end up inside a deliverable.
     _gen_preserved=0
     for _gen_pair in "out_root=$OUT_ROOT_ABS" "gen1=$GEN1_ROOT" "gen2=$GEN2_ROOT"; do
         _gen_tag=${_gen_pair%%=*}
         _gen_dir=${_gen_pair#*=}
         [ -d "$_gen_dir" ] || continue
-        _gen_snap="$SNAPSHOT_ROOT/$_gen_tag-$GEN_SNAPSHOT_DATE"
-        mkdir -p "$SNAPSHOT_ROOT" 2>/dev/null || true
+        _gen_snap=$(snapshot_root "u2-t3-$_gen_tag") || {
+            gen_fail "generate failed: cannot resolve the snapshot directory for $_gen_dir (SNOWBALL_SNAPSHOT_ROOT=$SNAPSHOT_BASE)"
+            return "$EXIT_GENERATE"
+        }
+        mkdir -p "$_gen_snap" 2>/dev/null || true
         if ! cp -r "$_gen_dir" "$_gen_snap" 2>/dev/null; then
             gen_fail "generate failed: cannot snapshot $_gen_dir into $_gen_snap"
             return "$EXIT_GENERATE"
@@ -1017,11 +1161,20 @@ $GEN2_ROOT"
             return "$EXIT_GENERATE"
         fi
         if [ "$_gen_tag" = "gen1" ]; then
-            # The per-language command lines, derived from the very same
-            # variables the generator was called with, so they cannot
-            # drift from what actually ran.
-            for _gen_lang in $GEN_LANGS; do
-                gen_emit "stage=generate lang=$_gen_lang cmd=$_gen_sb_unix/snowball $_gen_sb_unix/algorithms/$_gen_lang.sbl -python -eprefix _ -o $_gen_gen1_unix/${_gen_lang}_stemmer.py"
+            # Single source of truth for the cmd= lines: tools/gen_all.sh
+            # wrote one `stage=generate lang=<n> cmd=...` line per language
+            # into the raw transcript, and exactly those lines are copied
+            # here, verbatim.  Reconstructing them from the stage's own
+            # variables would be a second, drifting copy of what ran.
+            _gen_cmd_n=$(grep -c '^stage=generate lang=.* cmd=' "$GENERATE_RAW_LOG" 2>/dev/null)
+            [ -n "$_gen_cmd_n" ] || _gen_cmd_n=0
+            if [ "$_gen_cmd_n" -lt 11 ]; then
+                gen_fail "generate failed: the gen1 transcript holds $_gen_cmd_n/11 stage=generate cmd= lines (one per upstream language expected)"
+                return "$EXIT_GENERATE"
+            fi
+            grep '^stage=generate lang=.* cmd=' "$GENERATE_RAW_LOG" 2>/dev/null | tr -d '\r' | while IFS= read -r _gen_cmdline; do
+                gen_log "$_gen_cmdline"
+                printf '%s\n' "$_gen_cmdline"
             done
         fi
     done
@@ -1039,9 +1192,11 @@ $GEN2_ROOT"
             return "$EXIT_GENERATE"
         fi
     done
-    if [ "$_gen_same" -eq 11 ]; then
-        gen_emit "generated $_gen_same/11"
+    if [ "$_gen_same" -ne 11 ]; then
+        gen_fail "generate failed: parity $_gen_same/11"
+        return "$EXIT_GENERATE"
     fi
+    gen_emit "generated $_gen_same/11"
     _gen_py32=0
     for _gen_lang in $PY32_LANGS; do
         if cmp -s "$GEN1_ROOT/${_gen_lang}_stemmer.py" "$VENDOR_ROOT_ABS/py32/${_gen_lang}_stemmer.py"; then
@@ -1052,10 +1207,33 @@ $GEN2_ROOT"
             return "$EXIT_GENERATE"
         fi
     done
-    if [ "$_gen_py32" -eq 10 ]; then
-        gen_emit "py32 covered $_gen_py32/10 SAME"
+    if [ "$_gen_py32" -ne 10 ]; then
+        gen_fail "generate failed: parity $_gen_py32/10"
+        return "$EXIT_GENERATE"
     fi
+    gen_emit "py32 covered $_gen_py32/10 SAME"
     gen_emit "porter: no vendored py32 counterpart; its baseline is gen1 vs gen2 only (it is part of the 11/11 claim, never of the py32 count)"
+
+    # -- 5. out_root against gen1 ---------------------------------------
+    # The deliverable directory is compared byte for byte against the gen1
+    # baseline: without it the stage could report 11/11 while the files it
+    # hands to the translator are stale leftovers of an earlier run
+    # (tools/gen_all.sh clears the files it owns; this is the second gate).
+    _gen_out_same=0
+    for _gen_lang in $GEN_LANGS; do
+        if cmp -s "$OUT_ROOT_ABS/${_gen_lang}_stemmer.py" "$GEN1_ROOT/${_gen_lang}_stemmer.py"; then
+            _gen_out_same=$((_gen_out_same + 1))
+        else
+            gen_fail "generate failed: out_root/${_gen_lang}_stemmer.py differs from the gen1 baseline (stale or missing deliverable)"
+            gen_fail "generate failed: differing files: $OUT_ROOT_ABS/${_gen_lang}_stemmer.py $GEN1_ROOT/${_gen_lang}_stemmer.py"
+            return "$EXIT_GENERATE"
+        fi
+    done
+    if [ "$_gen_out_same" -ne 11 ]; then
+        gen_fail "generate failed: out_root parity $_gen_out_same/11"
+        return "$EXIT_GENERATE"
+    fi
+    gen_emit "out_root $_gen_out_same/11 identical to gen1"
     return 0
 }
 
@@ -1075,9 +1253,13 @@ stage_translate() {
     #         + <module-root>/<lang>/moon.pkg, one package per input: the
     #         eleven deliverables and porter311 (the 12th gate row, never a
     #         deliverable and never a lang_registry.mbt entry).
-    # Refusal: tools/translate.py writes only after a full AST rewrite, so
-    #          a refusal leaves no file behind; the stage propagates the
-    #          exit code and no later stage is entered.
+    # Refusal: each language is written per language, so a refusal at
+    #          language N leaves the files of languages 1..N-1 on disk (the
+    #          refusing language itself leaves none: tools/translate.py only
+    #          writes after the whole file has been rewritten).  The stage is
+    #          fail-fast, so the non-zero exit stops the run here and no later
+    #          stage ever consumes the partial set.  The next translate run
+    #          snapshots and overwrites all twelve packages again.
     #
     # The detail log describes the most recent run only.
     # ------------------------------------------------------------------
@@ -1109,13 +1291,20 @@ stage_translate() {
     _tr_all_langs="$TR_LANGS $TR_CONTROL_LANGS"
     _tr_vend="$VENDOR_ROOT_ABS/$VENDORED_PORTER311_REL"
 
+    # The module name comes from moon.mod and is written verbatim into each
+    # `<lang>/moon.pkg` import.  An empty name would emit `"/runtime" @rt`,
+    # so it is refused here, before anything is snapshotted or written.
+    if [ -z "$TR_MODULE_NAME" ]; then
+        tr_fatal "translate failed: the module name resolved empty (moon.mod: $MODULE_ROOT/moon.mod has no top-level name = \"...\"); each moon.pkg would import \"/runtime\" @rt"
+        return "$EXIT_TRANSLATE"
+    fi
+
     # -- 1. snapshot (the destructive-op precondition) ------------------
     # Every input the stage overwrites is copied out of the module first,
     # and the copy is confirmed before anything is written.  The snapshot
-    # area lives outside the module, so a copy can never end up inside a
-    # deliverable.
-    TR_SNAPSHOT_DATE=$(date +%Y%m%d-%H%M%S)
-    TR_SNAPSHOT_DIR="$TR_SNAPSHOT_ROOT/u2-t4-snapshot-$TR_SNAPSHOT_DATE"
+    # area is resolved by snapshot_root, so SNOWBALL_SNAPSHOT_ROOT applies
+    # here as it does to every other stage; the default is inside the module
+    # but under the gitignored .planning/logs/, never inside a deliverable.
     _tr_need_snapshot=0
     for _tr_lang in $_tr_all_langs; do
         if [ -e "$MODULE_ROOT/$_tr_lang/${_tr_lang}_gen.mbt" ]; then
@@ -1124,6 +1313,10 @@ stage_translate() {
         fi
     done
     if [ "$_tr_need_snapshot" -eq 1 ]; then
+        TR_SNAPSHOT_DIR=$(snapshot_root "u2-t4-snapshot") || {
+            tr_fail "translate failed: cannot resolve the snapshot directory (SNOWBALL_SNAPSHOT_ROOT=$SNAPSHOT_BASE)"
+            return "$EXIT_TRANSLATE"
+        }
         if ! mkdir -p "$TR_SNAPSHOT_DIR" 2>/dev/null; then
             tr_fail "translate failed: cannot create the snapshot directory $TR_SNAPSHOT_DIR"
             return "$EXIT_TRANSLATE"
@@ -1341,9 +1534,12 @@ stage_fmt() {
     # -- 2. snapshot (the destructive-op precondition) ------------------
     # `moon fmt` rewrites every selected .mbt in place, so the raw form is
     # copied out of the module first and the copy is confirmed before
-    # anything is written.
-    FMT_SNAPSHOT_DATE=$(date +%Y%m%d-%H%M%S)
-    FMT_SNAPSHOT_DIR="$T5_SNAPSHOT_ROOT/u2-t5-snapshot-$FMT_SNAPSHOT_DATE"
+    # anything is written.  snapshot_root applies the same
+    # SNOWBALL_SNAPSHOT_ROOT rule as the other stages.
+    FMT_SNAPSHOT_DIR=$(snapshot_root "u2-t5-snapshot") || {
+        fmt_fail "fmt failed: cannot resolve the snapshot directory (SNOWBALL_SNAPSHOT_ROOT=$SNAPSHOT_BASE)"
+        return "$EXIT_FMT"
+    }
     if ! mkdir -p "$FMT_SNAPSHOT_DIR" 2>/dev/null; then
         fmt_fail "fmt failed: cannot create the snapshot directory $FMT_SNAPSHOT_DIR"
         return "$EXIT_FMT"

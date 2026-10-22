@@ -135,7 +135,7 @@ class Translator:
                     if nm not in loc:
                         loc[nm] = nty or "Int"
                     elif nty and nty != loc[nm]:
-                        raise SystemExit(f"{item.name}: {nm} is {loc[nm]} then {nty}")
+                        raise Unsupported("local-type-conflict", getattr(val, "lineno", node.lineno))
             self.locals[item.name] = loc
         # error-signature closure: a routine needs `raise Lab` if it raises or
         # calls a routine that does.
@@ -186,7 +186,7 @@ class Translator:
     def e(self, n, as_char=False):
         m = getattr(self, "e_" + type(n).__name__, None)
         if m is None:
-            raise SystemExit(f"unhandled expr {type(n).__name__}: {ast.dump(n)}")
+            raise Unsupported(type(n).__name__.lower(), n.lineno)
         return m(n, as_char)
 
     def e_Name(self, n, as_char=False):
@@ -202,10 +202,10 @@ class Translator:
                 return "p." + mangle(a)
             if a in self.methods:
                 return mangle(a)
-            raise SystemExit(f"unknown self attribute {a}")
+            raise Unsupported("self." + a, n.lineno)
         if isinstance(v, ast.Name) and v.id == self.cls.name:
             return mangle(n.attr)
-        raise SystemExit(f"unhandled attribute {ast.dump(n)}")
+        raise Unsupported("attribute", n.lineno)
 
     def e_Constant(self, n, as_char=False):
         if isinstance(n.value, bool):
@@ -227,7 +227,7 @@ class Translator:
             return f"!({self.e(n.operand)})"
         if isinstance(n.op, ast.USub):
             return f"-{self.e(n.operand)}"
-        raise SystemExit("unary")
+        raise Unsupported("unary", n.lineno)
 
     def e_BoolOp(self, n, as_char=False):
         op = " && " if isinstance(n.op, ast.And) else " || "
@@ -250,13 +250,13 @@ class Translator:
         return f"({self.e(n.left)} {ops[type(n.op)]} {self.e(n.right)})"
 
     def e_Tuple(self, n, as_char=False):
-        raise SystemExit("bare tuple")
+        raise Unsupported("tuple", n.lineno)
 
     def e_Set(self, n, as_char=False):
-        raise SystemExit("bare set")
+        raise Unsupported("set", n.lineno)
 
     def e_List(self, n, as_char=False):
-        raise SystemExit("bare list")
+        raise Unsupported("list", n.lineno)
 
     def rt_call(self, name, args):
         return f"@{self.rt}.{name}(" + ", ".join(["e"] + args) + ")"
@@ -270,11 +270,11 @@ class Translator:
                 return mangle(a) + "(p" + "".join(", " + self.e(x) for x in n.args) + ")"
             if a in RUNTIME:
                 return self.rt_call(a, [self.e(x) for x in n.args])
-            raise SystemExit(f"unknown method {a}")
+            raise Unsupported("method." + a, n.lineno)
         if isinstance(f, ast.Name) and f.id == "len":
             return f"({self.e(n.args[0])}).length()"
         if isinstance(f, ast.Name) and f.id == "Among":
-            if len(n.args) >= 4:
+            if len(n.args) >= 4 or n.keywords:
                 raise Unsupported("among-callback", n.lineno)
             args = []
             for a in n.args:
@@ -283,9 +283,9 @@ class Translator:
                 elif isinstance(a, ast.UnaryOp) and isinstance(a.op, ast.USub):
                     args.append("-" + str(a.operand.value))
                 else:
-                    raise SystemExit("among arg")
+                    raise Unsupported("among-arg", a.lineno)
             return f"@{self.rt}.Among::new({', '.join(args)})"
-        raise SystemExit(f"unhandled call {ast.dump(n)}")
+        raise Unsupported("call", n.lineno)
 
     # -------------------------------------------------------------- statements
     def stmts(self, body, ind):
@@ -297,7 +297,7 @@ class Translator:
     def stmt(self, s, ind):
         m = getattr(self, "s_" + type(s).__name__, None)
         if m is None:
-            raise SystemExit(f"unhandled stmt {type(s).__name__}: {ast.dump(s)}")
+            raise Unsupported(type(s).__name__.lower(), s.lineno)
         return m(s, ind, "  " * ind)
 
     def s_Pass(self, s, ind, pad):
@@ -362,7 +362,7 @@ class Translator:
         elif isinstance(it, ast.Call) and isinstance(it.func, ast.Name) and it.func.id == "range":
             out = [pad + f"for _ in 0..<{self.e(it.args[0])} {{"]
         else:
-            raise SystemExit("for")
+            raise Unsupported("for", s.lineno)
         out += self.stmts(s.body, ind + 1)
         out.append(pad + "}")
         return out
@@ -378,14 +378,16 @@ class Translator:
         return out
 
     def s_FunctionDef(self, s, ind, pad):
-        raise SystemExit("nested function")
+        raise Unsupported("nested-function", s.lineno)
 
     # ------------------------------------------------------------------ output
     def among_expr(self, el):
-        if len(el.args) >= 4:
+        if len(el.args) >= 4 or el.keywords:
             # Among(s, substring_i, result, __r_foo): the callback would have
             # to capture the stemmer struct at module-level table initialisation,
             # which MoonBit rejects ([4021] p is unbound).  Refuse, never guess.
+            # The keyword form (`cb=__r_foo`) slips the positional count, so it
+            # is refused too.
             raise Unsupported("among-callback", el.lineno)
         args = []
         for a in el.args:
@@ -394,7 +396,7 @@ class Translator:
             elif isinstance(a, ast.UnaryOp) and isinstance(a.op, ast.USub):
                 args.append("-" + str(a.operand.value))
             else:
-                raise SystemExit("among arg")
+                raise Unsupported("among-arg", a.lineno)
         return f"@{self.rt}.Among::new({', '.join(args)})"
 
     def emit_const(self, name, val):

@@ -89,12 +89,20 @@ u_usage() {
 }
 
 # abspath <path> — POSIX absolute form of <path>, whether or not it exists.
-# Relative paths resolve against the invocation directory.
+# Relative paths resolve against the invocation directory.  A relative path
+# with no POSIX form for the invocation directory (PWD_POSIX empty) cannot be
+# resolved: say so and fail, never print a bare "/<relative>".
 
 abspath() {
     case "$1" in
         /*) _ap=$1 ;;
-        *) _ap=$PWD_POSIX/$1 ;;
+        *)
+            if [ -z "$PWD_POSIX" ]; then
+                u_err "unpack failed: cannot resolve the relative path '$1': the invocation directory has no POSIX form (PWD=$PWD)"
+                exit 4
+            fi
+            _ap=$PWD_POSIX/$1
+            ;;
     esac
     _ad=$(cd "$(dirname "$_ap")" 2>/dev/null && pwd -P) || _ad=""
     _ad=$(to_posix "$_ad")
@@ -123,8 +131,13 @@ md5_of() {
 
 [ "$#" -eq 2 ] || u_usage
 
-SRC=$(abspath "$1")
-DST=$(abspath "$2")
+# abspath runs in a command substitution, so its exit code does not end this
+# shell: an unresolvable path yields an empty value and the guard below is
+# what makes the run fail (non-zero) with the diagnostic already printed.
+SRC=$(abspath "$1") || exit 4
+[ -n "$SRC" ] || exit 4
+DST=$(abspath "$2") || exit 4
+[ -n "$DST" ] || exit 4
 
 if [ ! -d "$SRC" ]; then
     u_err "unpack failed: missing $SRC (the corpus directory does not exist; absolute: $SRC)"
@@ -141,7 +154,11 @@ if ! mkdir -p "$TMPD" 2>/dev/null; then
     u_err "unpack failed: cannot create the scratch directory $TMPD"
     exit 1
 fi
-trap 'rm -rf "$TMPD" 2>/dev/null || true' EXIT INT TERM
+# INT/TERM clean the scratch dir and then leave: without the exit an
+# interrupted run would carry on with a half-cleaned state.
+trap 'rm -rf "$TMPD" 2>/dev/null || true' EXIT
+trap 'rm -rf "$TMPD" 2>/dev/null || true; u_err "unpack interrupted"; exit 130' INT
+trap 'rm -rf "$TMPD" 2>/dev/null || true; u_err "unpack terminated"; exit 143' TERM
 
 # gz_error <errfile> <src> <dst> — print gzip's own first stderr line (it names
 # gzip and the absolute source path), then the failure line naming both paths.

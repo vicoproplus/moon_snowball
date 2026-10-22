@@ -27,9 +27,10 @@
 # (F-U2-09: without -eprefix _ the generated class has no _stem method).
 #
 # The number of .py files in an output directory is 12: the eleven upstream
-# language stemmers plus the __init__.py that the upstream create_init.py
-# writes.  The claim the pipeline is allowed to make is "11/11" — eleven
-# upstream languages — never "12/12".
+# language stemmers plus the __init__.py that create_init.py writes by
+# scanning that directory.  That __init__.py lists eleven entries (porter
+# included) and has no vendored baseline of its own; the claim the pipeline
+# is allowed to make is "11/11" -- eleven upstream languages -- never "12/12".
 
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -81,13 +82,21 @@ if ! preflight "$SB"; then
 fi
 mkdir -p "$OUT"
 
+# A dropped language or a short run must not leave old bytes behind: the
+# caller compares this directory against a fresh copy, so only the files
+# this script owns are removed first (nothing else in $OUT is touched).
+rm -f "$OUT"/*_stemmer.py "$OUT/__init__.py"
+
 LANGS="arabic dutch english french german italian porter portuguese russian spanish turkish"
 for L in $LANGS; do
-    echo "stage=generate lang=$L cmd=$SB/snowball $SB/algorithms/$L.sbl -python -eprefix _ -o $OUT/${L}_stemmer.py"
+    printf '%s\n' "stage=generate lang=$L cmd=$SB/snowball $SB/algorithms/$L.sbl -python -eprefix _ -o $OUT/${L}_stemmer.py"
     "$SB/snowball" "$SB/algorithms/$L.sbl" -python -eprefix _ -o "$OUT/${L}_stemmer.py"
 done
 
 # porter.sbl ships with the compiler but is not one of the libstemmer
-# languages, so create_init.py does not list it; generate it separately.
+# languages, so create_init.py does not list it explicitly; it is generated
+# in the loop above and then appears in the generated __init__.py because
+# create_init.py scans the directory.  There is no vendored baseline for
+# either file: the pipeline's own gen1 == gen2 comparison is the control.
 python3 "$SB/python/create_init.py" "$OUT"
-echo "gen_all: wrote the 11 upstream language stemmers and the upstream __init__.py to $OUT"
+printf '%s\n' "gen_all: wrote the 11 upstream language stemmers and the generated __init__.py (11 entries, porter included; no vendored baseline) to $OUT"
