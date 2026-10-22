@@ -11,3 +11,4 @@ snowball/
 stray/
 *.log
 申报书*
+build/
