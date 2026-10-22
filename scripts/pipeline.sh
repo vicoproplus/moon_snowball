@@ -33,9 +33,15 @@
 #     py32 covered 10/10 SAME  the ten vendored py32 stemmers are unchanged
 #
 # porter has no vendored py32 counterpart: its baseline is gen1 == gen2
-# only, and that is what the pipeline states.  The generation count never
-# includes the porter311 translation — that is a later task, and its number
-# is never written here.
+# only, and that is what the pipeline states.
+#
+# [2b] vendored-in (Task 10): the twelfth registered input, porter311, is
+# never generated.  Its input is the vendored snowballstemmer-3.1.1
+# porter_stemmer.py, taken as-is, so the stage only checks that the file
+# exists and that its md5 still equals the registered value; it logs
+# `stage=generate lang=porter311 source=vendored-3.1.1 md5=<value>` and no
+# command line (there is no upstream command).  The generation counts above
+# stay 11/11 + 10/10; the vendored file is a separate 1/1 claim.
 #
 # Log: .planning/logs/u2/T2-entry.log — one field per line.  The field
 #     vocabulary is stage=, lang=, file=, line=, exit=, elapsed=, cmd=, plus
@@ -206,10 +212,23 @@ PY32_LANGS="arabic dutch english french german italian portuguese russian spanis
 # and the module name is read from moon.mod, never hard-coded.
 TR_LANGS="$GEN_LANGS"
 
-# The fmt stage's deliverables: the same eleven packages the translate stage
-# writes.  The formatter is named package by package, so the module root,
-# runtime/ and cmd/golden/ are never rewritten by this stage.
+# The twelfth registered input: porter311.  It is not a deliverable and not
+# in lang_registry.mbt, and it never reaches the upstream compiler — [2b]
+# takes the vendored snowballstemmer-3.1.1 Python as-is.  The registered md5
+# is the contract value (shared-interface §3.4); a different value is fatal,
+# and the pipeline never rebuilds the file itself (that is U1-a's copy
+# contract, so a missing file is reported, never silently repaired).
+TR_CONTROL_LANGS="porter311"
+VENDORED_PORTER311_REL="snowballstemmer-3.1.1/porter_stemmer.py"
+VENDORED_PORTER311_MD5="50a9ce301dc157b611c8d3272eab4b28"
+
+# The fmt stage's inputs: the same eleven deliverable packages the translate
+# stage writes, plus the porter311 control package (12th gate row).  The
+# formatter is named package by package, so the module root, runtime/ and
+# cmd/golden/ are never rewritten by this stage.
 FMT_LANGS="$GEN_LANGS"
+FMT_CONTROL_LANGS="$TR_CONTROL_LANGS"
+
 TR_MODULE_NAME=$(sed -n 's/^[[:space:]]*name[[:space:]]*=[[:space:]]*"\(.*\)".*/\1/p' "$MODULE_ROOT/moon.mod" | sed -n 1p)
 mkdir -p "$LOG_ROOT" 2>/dev/null || true
 # The run log is append-only: every run appends its own banner, probe result
@@ -858,6 +877,15 @@ stage_generate() {
     # porter has no vendored py32 counterpart: its baseline is gen1 vs
     # gen2 only, and that is what the log says.
     #
+    # [2b] vendored-in (Task 10): the twelfth registered input, porter311,
+    # is not generated at all.  Its input is the vendored snowballstemmer
+    # 3.1.1 porter_stemmer.py, taken as-is, so the stage only verifies that
+    # the file exists and that its md5 still equals the registered value and
+    # logs `stage=generate lang=porter311 source=vendored-3.1.1 md5=<value>`
+    # with NO command line (there is no upstream compiler invocation).  The
+    # check runs before the generations: a missing or changed vendored file
+    # stops the stage, and no `.mbt` is ever written for it here.
+    #
     # The upstream compiler is a Linux ELF, so every generation happens
     # inside WSL: from the host the stage enters WSL exactly once per
     # generation (wsl -e bash -lc '...'), inside WSL it calls
@@ -866,6 +894,30 @@ stage_generate() {
 
     # The detail log describes the most recent run only.
     : > "$GENERATE_LOG" 2>/dev/null || true
+
+    # -- 0. [2b] vendored-in: the porter311 control input ---------------
+    # Not a generation: the twelfth registered input is the vendored
+    # snowballstemmer-3.1.1 porter_stemmer.py, so all the stage can do is
+    # verify it is still the registered bytes.  The check runs first, before
+    # any snapshot or compiler invocation, so a broken vendored input fails
+    # the stage immediately and no `.mbt` is ever written for it.
+    #
+    #     missing        stderr names the absolute path and `vendor missing`;
+    #                    the recovery is U1-a's copy contract, so the
+    #                    pipeline never rebuilds the file itself.
+    #     md5 drift      stderr names the actual and the registered value.
+    _gen_vend="$VENDOR_ROOT_ABS/$VENDORED_PORTER311_REL"
+    if [ ! -f "$_gen_vend" ]; then
+        gen_fail "generate failed: vendor missing: $_gen_vend (the vendored snowballstemmer-3.1.1 porter stemmer, registered as input 12; restore it by the U1-a copy contract from .planning/data/py-pkg/snowballstemmer/porter_stemmer.py and re-run)"
+        return "$EXIT_GENERATE"
+    fi
+    _gen_vend_md5=$(md5sum "$_gen_vend" 2>/dev/null | cut -d' ' -f1)
+    if [ "$_gen_vend_md5" != "$VENDORED_PORTER311_MD5" ]; then
+        gen_fail "generate failed: vendored input md5 drift: $_gen_vend (actual=$_gen_vend_md5 registered=$VENDORED_PORTER311_MD5)"
+        return "$EXIT_GENERATE"
+    fi
+    gen_emit "stage=generate lang=porter311 source=vendored-3.1.1 file=$_gen_vend md5=$_gen_vend_md5"
+    gen_emit "vendored input 1/1 md5 unchanged"
 
     GEN_SNAPSHOT_DATE=$(date +%Y%m%d-%H%M%S)
 
@@ -1013,12 +1065,16 @@ stage_translate() {
     #
     # Input:  $OUT_ROOT_ABS, the pipeline's resolved out_root (default
     #         build/gen), holding the eleven generated
-    #         <lang>_stemmer.py files.  The default input list is the
-    #         eleven deliverables of tools/lang_inputs.py; porter311 is
-    #         NOT among them (it needs --include-control, which is Task
-    #         10's business and is never passed here).
+    #         <lang>_stemmer.py files, plus the vendored snowballstemmer
+    #         3.1.1 porter_stemmer.py of the twelfth input (porter311).
+    #         The first invocation selects the eleven deliverables (the
+    #         default of tools/lang_inputs.py); a second invocation selects
+    #         porter311 with --lang porter311 --include-control, the only way
+    #         a non-deliverable control entry is translated.
     # Output: <module-root>/<lang>/<lang>_gen.mbt (raw translator output)
-    #         + <module-root>/<lang>/moon.pkg, one package per language.
+    #         + <module-root>/<lang>/moon.pkg, one package per input: the
+    #         eleven deliverables and porter311 (the 12th gate row, never a
+    #         deliverable and never a lang_registry.mbt entry).
     # Refusal: tools/translate.py writes only after a full AST rewrite, so
     #          a refusal leaves no file behind; the stage propagates the
     #          exit code and no later stage is entered.
@@ -1050,16 +1106,18 @@ stage_translate() {
     }
 
     : > "$TRANSLATE_LOG" 2>/dev/null || true
+    _tr_all_langs="$TR_LANGS $TR_CONTROL_LANGS"
+    _tr_vend="$VENDOR_ROOT_ABS/$VENDORED_PORTER311_REL"
 
     # -- 1. snapshot (the destructive-op precondition) ------------------
-    # Every deliverable the stage overwrites is copied out of the module
-    # first, and the copy is confirmed before anything is written.  The
-    # snapshot area lives outside the module, so a copy can never end up
-    # inside a deliverable.
+    # Every input the stage overwrites is copied out of the module first,
+    # and the copy is confirmed before anything is written.  The snapshot
+    # area lives outside the module, so a copy can never end up inside a
+    # deliverable.
     TR_SNAPSHOT_DATE=$(date +%Y%m%d-%H%M%S)
     TR_SNAPSHOT_DIR="$TR_SNAPSHOT_ROOT/u2-t4-snapshot-$TR_SNAPSHOT_DATE"
     _tr_need_snapshot=0
-    for _tr_lang in $TR_LANGS; do
+    for _tr_lang in $_tr_all_langs; do
         if [ -e "$MODULE_ROOT/$_tr_lang/${_tr_lang}_gen.mbt" ]; then
             _tr_need_snapshot=1
             break
@@ -1070,7 +1128,7 @@ stage_translate() {
             tr_fail "translate failed: cannot create the snapshot directory $TR_SNAPSHOT_DIR"
             return "$EXIT_TRANSLATE"
         fi
-        for _tr_lang in $TR_LANGS; do
+        for _tr_lang in $_tr_all_langs; do
             [ -d "$MODULE_ROOT/$_tr_lang" ] || continue
             if ! cp -r "$MODULE_ROOT/$_tr_lang" "$TR_SNAPSHOT_DIR/" 2>/dev/null; then
                 tr_fail "translate failed: cannot snapshot $MODULE_ROOT/$_tr_lang into $TR_SNAPSHOT_DIR"
@@ -1081,15 +1139,16 @@ stage_translate() {
                 return "$EXIT_TRANSLATE"
             fi
         done
-        tr_emit "snapshot: preserved the 11 language directories -> $TR_SNAPSHOT_DIR"
+        tr_emit "snapshot: preserved the 12 language directories -> $TR_SNAPSHOT_DIR"
     else
         tr_emit "snapshot: nothing to preserve"
     fi
 
     # -- 2. inputs -------------------------------------------------------
-    # The eleven generated Python stemmers.  A missing input names the
-    # parameter it came from and the file that is absent; nothing has been
-    # written at that point.
+    # The eleven generated Python stemmers plus the one vendored file.  A
+    # missing input names the parameter it came from and the file that is
+    # absent; nothing has been written at that point.  porter311's absence is
+    # reported as `vendor missing`, exactly as the generate stage does.
     if [ ! -d "$OUT_ROOT_ABS" ]; then
         tr_fatal "translate failed: out_root ($OUT_SRC --out) does not exist: $OUT_ROOT_ABS"
         return "$EXIT_TRANSLATE"
@@ -1100,11 +1159,21 @@ stage_translate() {
             return "$EXIT_TRANSLATE"
         fi
     done
+    if [ ! -f "$_tr_vend" ]; then
+        tr_fatal "translate failed: vendor missing: $_tr_vend (the vendored snowballstemmer-3.1.1 porter stemmer, registered as input 12; restore it by the U1-a copy contract from .planning/data/py-pkg/snowballstemmer/porter_stemmer.py and re-run)"
+        return "$EXIT_TRANSLATE"
+    fi
+    _tr_vend_md5=$(md5sum "$_tr_vend" 2>/dev/null | cut -d' ' -f1)
+    if [ "$_tr_vend_md5" != "$VENDORED_PORTER311_MD5" ]; then
+        tr_fatal "translate failed: vendored input md5 drift: $_tr_vend (actual=$_tr_vend_md5 registered=$VENDORED_PORTER311_MD5)"
+        return "$EXIT_TRANSLATE"
+    fi
 
-    # -- 3. the eleven translations --------------------------------------
+    # -- 3. the twelve translations --------------------------------------
     # tools/translate_all.py writes <lang>/<lang>_gen.mbt and, when absent,
-    # <lang>/moon.pkg.  The eleven deliverables are its default selection;
-    # --include-control (porter311) is never passed here.
+    # <lang>/moon.pkg.  Two invocations: the eleven deliverables (the
+    # script's default selection) and then the porter311 control entry, which
+    # needs --include-control.  Each is logged with its own command.
     : > "$TRANSLATE_RAW_LOG" 2>/dev/null || true
     TR_CMD="$PYTHON_BIN tools/translate_all.py --gen-dir $OUT_ROOT_ABS --out-root $MODULE_ROOT --module $TR_MODULE_NAME"
     tr_log "cmd=$TR_CMD"
@@ -1119,14 +1188,33 @@ stage_translate() {
         tail -n 20 "$TRANSLATE_RAW_LOG" 2>/dev/null >&2
         return "$EXIT_TRANSLATE"
     fi
+    TR_CTRL_CMD="$PYTHON_BIN tools/translate_all.py --gen-dir $OUT_ROOT_ABS --out-root $MODULE_ROOT --module $TR_MODULE_NAME --lang $TR_CONTROL_LANGS --include-control"
+    tr_log "cmd=$TR_CTRL_CMD"
+    ( cd "$MODULE_ROOT" && $PYTHON_BIN tools/translate_all.py \
+        --gen-dir "$OUT_ROOT_ABS" \
+        --out-root "$MODULE_ROOT" \
+        --module "$TR_MODULE_NAME" \
+        --lang "$TR_CONTROL_LANGS" \
+        --include-control ) >>"$TRANSLATE_RAW_LOG" 2>&1
+    _tr_rc=$?
+    tr_log "$(cat "$TRANSLATE_RAW_LOG" 2>/dev/null)"
+    if [ "$_tr_rc" -ne 0 ]; then
+        tr_fail "translate failed: tools/translate_all.py failed (exit=$_tr_rc) cmd=$TR_CTRL_CMD"
+        tail -n 20 "$TRANSLATE_RAW_LOG" 2>/dev/null >&2
+        return "$EXIT_TRANSLATE"
+    fi
 
     # Per-language lines: file, out, raw line count, elapsed seconds.  The
     # counts are the translator's raw output; the post-moon fmt counts are
-    # Task 5's business.
+    # Task 5's business.  porter311's `file=` is the vendored Python: it has
+    # no out_root copy, because [2b] never generates it.
     _tr_total=0
     _tr_start=$(date +%s)
-    for _tr_lang in $TR_LANGS; do
+    for _tr_lang in $_tr_all_langs; do
         _tr_py="$OUT_ROOT_ABS/${_tr_lang}_stemmer.py"
+        if [ "$_tr_lang" = "$TR_CONTROL_LANGS" ]; then
+            _tr_py="$_tr_vend"
+        fi
         _tr_mbt="$MODULE_ROOT/$_tr_lang/${_tr_lang}_gen.mbt"
         if [ ! -f "$_tr_mbt" ]; then
             tr_fail "translate failed: expected output missing: $_tr_mbt"
@@ -1160,8 +1248,11 @@ stage_translate() {
     # -- 5. raise-count parity (AD1-1) -----------------------------------
     # One `raise labN` in Python must produce exactly one `raise @rt.LabN`
     # in MoonBit, per language.
-    for _tr_lang in $TR_LANGS; do
+    for _tr_lang in $_tr_all_langs; do
         _tr_py="$OUT_ROOT_ABS/${_tr_lang}_stemmer.py"
+        if [ "$_tr_lang" = "$TR_CONTROL_LANGS" ]; then
+            _tr_py="$_tr_vend"
+        fi
         _tr_mbt="$MODULE_ROOT/$_tr_lang/${_tr_lang}_gen.mbt"
         _tr_a=$(grep -o "raise lab[0-4]" "$_tr_py" 2>/dev/null | wc -l)
         _tr_b=$(grep -o "raise @rt.Lab[0-4]" "$_tr_mbt" 2>/dev/null | wc -l)
@@ -1172,7 +1263,7 @@ stage_translate() {
         fi
     done
 
-    tr_emit "translated 11/11 raw_lines=$_tr_total residues=0 raise-parity=11/11"
+    tr_emit "translated 12/12 raw_lines=$_tr_total residues=0 raise-parity=12/12"
     return 0
 }
 
@@ -1192,11 +1283,13 @@ stage_fmt() {
     # the rewrite happen at all; idempotence is proved separately by
     # running the formatter a second time and comparing the md5 baselines.
     #
-    # The formatter is run once over the eleven language packages by name,
-    # not over the whole module: `moon fmt` with no path also rewrites
-    # runtime/, cmd/golden/ and the root moon.pkg, and those are not this
-    # stage's deliverables.  Naming the packages keeps the stage's write
-    # set exactly the eleven *_gen.mbt files.
+    # The formatter is run once over the twelve input packages by name, not
+    # over the whole module: `moon fmt` with no path also rewrites runtime/,
+    # cmd/golden/ and the root moon.pkg, and those are not this stage's
+    # deliverables.  Naming the packages keeps the stage's write set exactly
+    # the twelve *_gen.mbt files (the eleven deliverables + porter311).
+    # The count claims keep the two populations apart: 11 deliverables =
+    # 10,837 lines, and with the porter311 control row = 11,407 lines.
     #
     # The detail log describes the most recent run only.
     # ------------------------------------------------------------------
@@ -1221,10 +1314,12 @@ stage_fmt() {
     : > "$FMT_LOG" 2>/dev/null || true
 
     _fmt_start=$(date +%s)
+    _fmt_all_langs="$FMT_LANGS $FMT_CONTROL_LANGS"
 
     # -- 1. inputs -------------------------------------------------------
-    # Every deliverable must exist before the formatter is allowed to run;
-    # a missing one is a broken translate stage, not a fmt problem.
+    # Every input must exist before the formatter is allowed to run; a
+    # missing one is a broken translate stage, not a fmt problem.  The
+    # deliverables and the porter311 control row are counted apart.
     _fmt_files=0
     for _fmt_lang in $FMT_LANGS; do
         if [ ! -f "$MODULE_ROOT/$_fmt_lang/${_fmt_lang}_gen.mbt" ]; then
@@ -1233,7 +1328,15 @@ stage_fmt() {
         fi
         _fmt_files=$((_fmt_files + 1))
     done
-    fmt_emit "input: $_fmt_files/11 *_gen.mbt present (raw translator output)"
+    _fmt_ctrl=0
+    for _fmt_lang in $FMT_CONTROL_LANGS; do
+        if [ ! -f "$MODULE_ROOT/$_fmt_lang/${_fmt_lang}_gen.mbt" ]; then
+            fmt_fail "fmt failed: missing control input: $MODULE_ROOT/$_fmt_lang/${_fmt_lang}_gen.mbt (translate stage did not write it)"
+            return "$EXIT_FMT"
+        fi
+        _fmt_ctrl=$((_fmt_ctrl + 1))
+    done
+    fmt_emit "input: $_fmt_files/11 deliverable *_gen.mbt + $_fmt_ctrl/1 porter311 present (raw translator output)"
 
     # -- 2. snapshot (the destructive-op precondition) ------------------
     # `moon fmt` rewrites every selected .mbt in place, so the raw form is
@@ -1245,7 +1348,7 @@ stage_fmt() {
         fmt_fail "fmt failed: cannot create the snapshot directory $FMT_SNAPSHOT_DIR"
         return "$EXIT_FMT"
     fi
-    for _fmt_lang in $FMT_LANGS; do
+    for _fmt_lang in $_fmt_all_langs; do
         if ! cp "$MODULE_ROOT/$_fmt_lang/${_fmt_lang}_gen.mbt" "$FMT_SNAPSHOT_DIR/" 2>/dev/null; then
             fmt_fail "fmt failed: cannot snapshot $_fmt_lang/${_fmt_lang}_gen.mbt into $FMT_SNAPSHOT_DIR"
             return "$EXIT_FMT"
@@ -1255,15 +1358,15 @@ stage_fmt() {
             return "$EXIT_FMT"
         fi
     done
-    fmt_emit "snapshot: preserved the 11 *_gen.mbt (raw form) -> $FMT_SNAPSHOT_DIR"
+    fmt_emit "snapshot: preserved the 12 *_gen.mbt (raw form) -> $FMT_SNAPSHOT_DIR"
 
     # -- 3. the formatter ------------------------------------------------
-    # One invocation, in the module root, over the eleven packages.  The
+    # One invocation, in the module root, over the twelve packages.  The
     # transcript goes to the fmt log, never through tee: the exit code
     # tested is moon's own.
-    FMT_CMD="moon fmt $FMT_LANGS"
+    FMT_CMD="moon fmt $_fmt_all_langs"
     fmt_log "cmd=$FMT_CMD"
-    ( cd "$MODULE_ROOT" && moon fmt $FMT_LANGS ) >>"$FMT_LOG" 2>&1
+    ( cd "$MODULE_ROOT" && moon fmt $_fmt_all_langs ) >>"$FMT_LOG" 2>&1
     _fmt_rc=$?
     if [ "$_fmt_rc" -ne 0 ]; then
         fmt_fail "fmt failed: $FMT_CMD failed (exit=$_fmt_rc)"
@@ -1272,8 +1375,9 @@ stage_fmt() {
     fi
 
     # -- 4. baseline A: the post-fmt form --------------------------------
-    # md5 + line count per deliverable.  The line counts are the spec's
-    # F-U2-21 table (10,837 lines over the eleven files).
+    # md5 + line count per input.  The line counts are the spec's F-U2-21
+    # table (10,837 lines over the eleven deliverables; porter311 adds its
+    # own 570, for 11,407 over the twelve rows).
     ( cd "$MODULE_ROOT" && md5sum */[a-z]*_gen.mbt ) >"$FMT_MD5_A" 2>/dev/null
     if [ $? -ne 0 ]; then
         fmt_fail "fmt failed: cannot write the md5 baseline $FMT_MD5_A"
@@ -1285,16 +1389,21 @@ stage_fmt() {
         return "$EXIT_FMT"
     fi
     _fmt_total=0
-    for _fmt_lang in $FMT_LANGS; do
+    _fmt_ctrl_total=0
+    for _fmt_lang in $_fmt_all_langs; do
         _fmt_n=$(wc -l <"$MODULE_ROOT/$_fmt_lang/${_fmt_lang}_gen.mbt" 2>/dev/null | tr -d ' ')
         _fmt_md5=$(md5sum "$MODULE_ROOT/$_fmt_lang/${_fmt_lang}_gen.mbt" 2>/dev/null | cut -d' ' -f1)
-        _fmt_total=$((_fmt_total + ${_fmt_n:-0}))
+        case " $FMT_LANGS " in
+            *" $_fmt_lang "*) _fmt_total=$((_fmt_total + ${_fmt_n:-0})) ;;
+            *) _fmt_ctrl_total=$((_fmt_ctrl_total + ${_fmt_n:-0})) ;;
+        esac
         fmt_emit "stage=fmt lang=$_fmt_lang file=$_fmt_lang/${_fmt_lang}_gen.mbt lines=$_fmt_n md5=$_fmt_md5"
     done
     fmt_emit "formatted $_fmt_files/11 lines=$_fmt_total (post-moon fmt form)"
+    fmt_emit "formatted porter311/1 lines=$_fmt_ctrl_total (control row; 12 inputs = $((_fmt_total + _fmt_ctrl_total)) lines)"
 
     # -- 5. idempotence: a second pass must not change a byte ------------
-    ( cd "$MODULE_ROOT" && moon fmt $FMT_LANGS ) >>"$FMT_LOG" 2>&1
+    ( cd "$MODULE_ROOT" && moon fmt $_fmt_all_langs ) >>"$FMT_LOG" 2>&1
     _fmt_rc2=$?
     if [ "$_fmt_rc2" -ne 0 ]; then
         fmt_fail "fmt failed: the idempotence re-run of $FMT_CMD failed (exit=$_fmt_rc2)"
