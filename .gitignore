@@ -12,3 +12,4 @@ stray/
 *.log
 申报书*
 build/
+pkg.generated.mbti
