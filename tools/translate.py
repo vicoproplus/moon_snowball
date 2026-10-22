@@ -34,6 +34,14 @@ STR = {"slice_to", "assign_to", "get_current"}
 RUNTIME = UNIT | BOOL | INT | STR
 ENV_FIELDS = {"cursor", "limit", "limit_backward", "bra", "ket", "current"}
 
+class Unsupported(Exception):
+    """An input construct the translator refuses to express; nothing is written."""
+
+    def __init__(self, kind, lineno):
+        super().__init__(kind)
+        self.kind = kind
+        self.lineno = lineno
+
 
 def mangle(name):
     if name.startswith("__r_"):
@@ -266,6 +274,8 @@ class Translator:
         if isinstance(f, ast.Name) and f.id == "len":
             return f"({self.e(n.args[0])}).length()"
         if isinstance(f, ast.Name) and f.id == "Among":
+            if len(n.args) >= 4:
+                raise Unsupported("among-callback", n.lineno)
             args = []
             for a in n.args:
                 if isinstance(a, ast.Constant):
@@ -372,16 +382,17 @@ class Translator:
 
     # ------------------------------------------------------------------ output
     def among_expr(self, el):
+        if len(el.args) >= 4:
+            # Among(s, substring_i, result, __r_foo): the callback would have
+            # to capture the stemmer struct at module-level table initialisation,
+            # which MoonBit rejects ([4021] p is unbound).  Refuse, never guess.
+            raise Unsupported("among-callback", el.lineno)
         args = []
         for a in el.args:
             if isinstance(a, ast.Constant):
                 args.append(str_lit(a.value) if isinstance(a.value, str) else str(a.value))
             elif isinstance(a, ast.UnaryOp) and isinstance(a.op, ast.USub):
                 args.append("-" + str(a.operand.value))
-            elif isinstance(a, ast.Name) and a.id in self.methods:
-                # Among(..., __r_foo): callback.  find_among hands the callback
-                # only the Env, so close over the stemmer struct.
-                args.append(f"cb=Some(e2 => {mangle(a.id)}(p))")
             else:
                 raise SystemExit("among arg")
         return f"@{self.rt}.Among::new({', '.join(args)})"
@@ -459,10 +470,15 @@ class Translator:
 def main():
     src, dst, struct, rt = sys.argv[1:5]
     tree = ast.parse(open(src, encoding="utf-8").read())
-    txt = Translator(tree, struct, rt).run()
+    try:
+        txt = Translator(tree, struct, rt).run()
+    except Unsupported as exc:
+        print(f"{src}:{exc.lineno}: unsupported: {exc.kind}", file=sys.stderr)
+        return 2
     open(dst, "w", encoding="utf-8", newline="\n").write(txt)
     print(f"{dst}: {txt.count(chr(10))} lines")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

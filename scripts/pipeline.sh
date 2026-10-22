@@ -50,6 +50,12 @@
 # per-language command lines and the two parity claims live there.  The
 # raw transcript of every generation is appended to T3-generate-raw.log.
 #
+# The translate stage keeps its own detail log in
+# .planning/logs/u2/T4-translate.log (truncated at the start of every
+# translate run): one line per language with the input file, the written
+# file, its raw line count and the elapsed seconds, plus the residue and
+# raise-count assertions that follow the translations.
+#
 # Exit codes:
 #     0  every selected stage succeeded
 #     2  usage error (unknown flag, unknown --stage/--only value) or a stage
@@ -59,6 +65,9 @@
 #     5  the wslpath round-trip probe failed
 #     6  the generate stage failed (compiler missing, WSL unreachable, a
 #        generation error, or a parity mismatch)
+#     7  the translate stage failed (an input file is missing, the
+#        translator refused a construct, or a residue/raise-count
+#        assertion did not hold)
 #     other  the exit code of the first failing stage.  The run is fail-fast:
 #        a later stage is never entered after a failure.
 #
@@ -99,6 +108,7 @@ EXIT_TOOLCHAIN=3
 EXIT_PATH=4
 EXIT_PROBE=5
 EXIT_GENERATE=6
+EXIT_TRANSLATE=7
 
 
 # The generate stage (Task 3) has its own log: the per-language command
@@ -107,6 +117,18 @@ EXIT_GENERATE=6
 # raw transcript of every generation is appended to GENERATE_RAW_LOG.
 GENERATE_LOG="$LOG_ROOT/T3-generate.log"
 GENERATE_RAW_LOG="$LOG_ROOT/T3-generate-raw.log"
+
+# The translate stage (Task 4) keeps its own detail log, truncated at the
+# start of every translate run: one line per language plus the residue and
+# raise-count assertions that follow the translations.
+TRANSLATE_LOG="$LOG_ROOT/T4-translate.log"
+
+# Where the translate stage snapshots an existing deliverable directory
+# before overwriting it.  Outside the module by default so a copy can never
+# land inside the tree it is copying; SNOWBALL_T4_SNAPSHOT_ROOT relocates it.
+TRANSLATE_RAW_LOG="$LOG_ROOT/T4-translate-raw.log"
+TR_SNAPSHOT_ROOT="${SNOWBALL_T4_SNAPSHOT_ROOT:-$LOG_ROOT/snapshot}"
+
 
 # The two parity directories and the snapshot area.  The snapshot area
 # lives under .planning/logs/ (gitignored) and is *outside* every directory
@@ -121,6 +143,13 @@ SNAPSHOT_ROOT="$LOG_ROOT/snapshot"
 # have a vendored py32 counterpart under tools/vendor/py32/.
 GEN_LANGS="arabic dutch english french german italian porter portuguese russian spanish turkish"
 PY32_LANGS="arabic dutch english french german italian portuguese russian spanish turkish"
+
+# The translate stage's inputs and the module name written into each
+# <lang>/moon.pkg import.  The input list is the eleven deliverables (the
+# same eleven the generate stage produces; porter311 is not a deliverable),
+# and the module name is read from moon.mod, never hard-coded.
+TR_LANGS="$GEN_LANGS"
+TR_MODULE_NAME=$(sed -n 's/^[[:space:]]*name[[:space:]]*=[[:space:]]*"\(.*\)".*/\1/p' "$MODULE_ROOT/moon.mod" | sed -n 1p)
 mkdir -p "$LOG_ROOT" 2>/dev/null || true
 # The run log is append-only: every run appends its own banner, probe result
 # and stage lines, so the evidence of both the host run and the WSL run
@@ -751,8 +780,172 @@ $GEN2_ROOT"
 }
 
 stage_translate() {
-    log_err "translate is not implemented: Task 4 wires tools/translate_all.py."
-    return 2
+    # ------------------------------------------------------------------
+    # Task 4 - the translator segment.
+    #
+    # Input:  $OUT_ROOT_ABS, the pipeline's resolved out_root (default
+    #         build/gen), holding the eleven generated
+    #         <lang>_stemmer.py files.  The default input list is the
+    #         eleven deliverables of tools/lang_inputs.py; porter311 is
+    #         NOT among them (it needs --include-control, which is Task
+    #         10's business and is never passed here).
+    # Output: <module-root>/<lang>/<lang>_gen.mbt (raw translator output)
+    #         + <module-root>/<lang>/moon.pkg, one package per language.
+    # Refusal: tools/translate.py writes only after a full AST rewrite, so
+    #          a refusal leaves no file behind; the stage propagates the
+    #          exit code and no later stage is entered.
+    #
+    # The detail log describes the most recent run only.
+    # ------------------------------------------------------------------
+
+    # tr_log <text> — one line to the translate stage's own log.
+    tr_log() {
+        printf '%s\n' "$*" >>"$TRANSLATE_LOG" 2>/dev/null || true
+    }
+
+    # tr_emit <text> — one line to stdout and to the translate log.
+    tr_emit() {
+        printf '%s\n' "$*"
+        tr_log "$*"
+    }
+
+    # tr_fail <text> — one line to stderr, the run log and the translate log.
+    tr_fail() {
+        log_err "$*"
+        tr_log "$*"
+    }
+
+    # tr_fatal <text> — a failure that ends the stage with $EXIT_TRANSLATE.
+    tr_fatal() {
+        tr_fail "$*"
+        return "$EXIT_TRANSLATE"
+    }
+
+    : > "$TRANSLATE_LOG" 2>/dev/null || true
+
+    # -- 1. snapshot (the destructive-op precondition) ------------------
+    # Every deliverable the stage overwrites is copied out of the module
+    # first, and the copy is confirmed before anything is written.  The
+    # snapshot area lives outside the module, so a copy can never end up
+    # inside a deliverable.
+    TR_SNAPSHOT_DATE=$(date +%Y%m%d-%H%M%S)
+    TR_SNAPSHOT_DIR="$TR_SNAPSHOT_ROOT/u2-t4-snapshot-$TR_SNAPSHOT_DATE"
+    _tr_need_snapshot=0
+    for _tr_lang in $TR_LANGS; do
+        if [ -e "$MODULE_ROOT/$_tr_lang/${_tr_lang}_gen.mbt" ]; then
+            _tr_need_snapshot=1
+            break
+        fi
+    done
+    if [ "$_tr_need_snapshot" -eq 1 ]; then
+        if ! mkdir -p "$TR_SNAPSHOT_DIR" 2>/dev/null; then
+            tr_fail "translate failed: cannot create the snapshot directory $TR_SNAPSHOT_DIR"
+            return "$EXIT_TRANSLATE"
+        fi
+        for _tr_lang in $TR_LANGS; do
+            [ -d "$MODULE_ROOT/$_tr_lang" ] || continue
+            if ! cp -r "$MODULE_ROOT/$_tr_lang" "$TR_SNAPSHOT_DIR/" 2>/dev/null; then
+                tr_fail "translate failed: cannot snapshot $MODULE_ROOT/$_tr_lang into $TR_SNAPSHOT_DIR"
+                return "$EXIT_TRANSLATE"
+            fi
+            if [ ! -d "$TR_SNAPSHOT_DIR/$_tr_lang" ]; then
+                tr_fail "translate failed: the snapshot copy $TR_SNAPSHOT_DIR/$_tr_lang does not exist"
+                return "$EXIT_TRANSLATE"
+            fi
+        done
+        tr_emit "snapshot: preserved the 11 language directories -> $TR_SNAPSHOT_DIR"
+    else
+        tr_emit "snapshot: nothing to preserve"
+    fi
+
+    # -- 2. inputs -------------------------------------------------------
+    # The eleven generated Python stemmers.  A missing input names the
+    # parameter it came from and the file that is absent; nothing has been
+    # written at that point.
+    if [ ! -d "$OUT_ROOT_ABS" ]; then
+        tr_fatal "translate failed: out_root ($OUT_SRC --out) does not exist: $OUT_ROOT_ABS"
+        return "$EXIT_TRANSLATE"
+    fi
+    for _tr_lang in $TR_LANGS; do
+        if [ ! -f "$OUT_ROOT_ABS/${_tr_lang}_stemmer.py" ]; then
+            tr_fatal "translate failed: missing input file: $OUT_ROOT_ABS/${_tr_lang}_stemmer.py (out_root, $OUT_SRC --out: $OUT_ROOT_ABS)"
+            return "$EXIT_TRANSLATE"
+        fi
+    done
+
+    # -- 3. the eleven translations --------------------------------------
+    # tools/translate_all.py writes <lang>/<lang>_gen.mbt and, when absent,
+    # <lang>/moon.pkg.  The eleven deliverables are its default selection;
+    # --include-control (porter311) is never passed here.
+    : > "$TRANSLATE_RAW_LOG" 2>/dev/null || true
+    TR_CMD="$PYTHON_BIN tools/translate_all.py --gen-dir $OUT_ROOT_ABS --out-root $MODULE_ROOT --module $TR_MODULE_NAME"
+    tr_log "cmd=$TR_CMD"
+    ( cd "$MODULE_ROOT" && $PYTHON_BIN tools/translate_all.py \
+        --gen-dir "$OUT_ROOT_ABS" \
+        --out-root "$MODULE_ROOT" \
+        --module "$TR_MODULE_NAME" ) >>"$TRANSLATE_RAW_LOG" 2>&1
+    _tr_rc=$?
+    tr_log "$(cat "$TRANSLATE_RAW_LOG" 2>/dev/null)"
+    if [ "$_tr_rc" -ne 0 ]; then
+        tr_fail "translate failed: tools/translate_all.py failed (exit=$_tr_rc) cmd=$TR_CMD"
+        tail -n 20 "$TRANSLATE_RAW_LOG" 2>/dev/null >&2
+        return "$EXIT_TRANSLATE"
+    fi
+
+    # Per-language lines: file, out, raw line count, elapsed seconds.  The
+    # counts are the translator's raw output; the post-moon fmt counts are
+    # Task 5's business.
+    _tr_total=0
+    _tr_start=$(date +%s)
+    for _tr_lang in $TR_LANGS; do
+        _tr_py="$OUT_ROOT_ABS/${_tr_lang}_stemmer.py"
+        _tr_mbt="$MODULE_ROOT/$_tr_lang/${_tr_lang}_gen.mbt"
+        if [ ! -f "$_tr_mbt" ]; then
+            tr_fail "translate failed: expected output missing: $_tr_mbt"
+            return "$EXIT_TRANSLATE"
+        fi
+        _tr_lines=$(wc -l <"$_tr_mbt" | tr -d ' ')
+        _tr_total=$((_tr_total + _tr_lines))
+        _tr_now=$(date +%s)
+        tr_emit "stage=translate lang=$_tr_lang file=$_tr_py out=$_tr_mbt lines=$_tr_lines elapsed=$((_tr_now - _tr_start))"
+        _tr_start=$_tr_now
+    done
+
+    # -- 4. residue assertions -------------------------------------------
+    # AD1-3 (`self.`), AD1-4 (`@rt::`) and AD1-5 (` in range(`) must be
+    # absent from every generated file.  Each assertion runs separately so
+    # a failure names the residue that fired.
+    _tr_residues=0
+    for _tr_res in 'self\.' '@rt::' ' in range('; do
+        _tr_hits=$(grep -rn -- "$_tr_res" "$MODULE_ROOT"/*/[a-z]*_gen.mbt 2>/dev/null | wc -l)
+        tr_emit "residue '$_tr_res' hits=$_tr_hits"
+        if [ "$_tr_hits" -ne 0 ]; then
+            _tr_residues=$((_tr_residues + _tr_hits))
+            tr_fail "translate failed: residue '$_tr_res' found in the generated files ($_tr_hits hit(s))"
+            tr_log "$(grep -rn -- "$_tr_res" "$MODULE_ROOT"/*/[a-z]*_gen.mbt 2>/dev/null | head -n 20)"
+        fi
+    done
+    if [ "$_tr_residues" -ne 0 ]; then
+        return "$EXIT_TRANSLATE"
+    fi
+
+    # -- 5. raise-count parity (AD1-1) -----------------------------------
+    # One `raise labN` in Python must produce exactly one `raise @rt.LabN`
+    # in MoonBit, per language.
+    for _tr_lang in $TR_LANGS; do
+        _tr_py="$OUT_ROOT_ABS/${_tr_lang}_stemmer.py"
+        _tr_mbt="$MODULE_ROOT/$_tr_lang/${_tr_lang}_gen.mbt"
+        _tr_a=$(grep -o "raise lab[0-4]" "$_tr_py" 2>/dev/null | wc -l)
+        _tr_b=$(grep -o "raise @rt.Lab[0-4]" "$_tr_mbt" 2>/dev/null | wc -l)
+        tr_emit "stage=translate lang=$_tr_lang raise_py=$_tr_a raise_mbt=$_tr_b"
+        if [ "$_tr_a" != "$_tr_b" ]; then
+            tr_fail "translate failed: $_tr_lang raise count differs (py=$_tr_a mbt=$_tr_b)"
+            return "$EXIT_TRANSLATE"
+        fi
+    done
+
+    tr_emit "translated 11/11 raw_lines=$_tr_total residues=0 raise-parity=11/11"
+    return 0
 }
 
 stage_fmt() {
