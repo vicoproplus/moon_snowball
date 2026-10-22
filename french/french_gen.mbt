@@ -8,7 +8,7 @@ pub struct French {
 
 ///|
 pub fn French::new() -> French {
-  { e: @rt.Env::new("") }
+  { e: @rt.Env::new(""), }
 }
 
 ///|
@@ -227,55 +227,55 @@ let a_9 : Array[@rt.Among] = [
 ///|
 fn stem_inner(p : French) -> Bool raise @rt.Lab {
   let e = p.e
-  let mut v_1 : Int = 0
-  let mut v_2 : Int = 0
-  let mut v_10 : Int = 0
-  let mut v_37 : Int = 0
-  let mut v_39 : Int = 0
-  let mut v_41 : Int = 0
-  let mut i_pV : Int = 0
-  let mut i_p1 : Int = 0
-  let mut i_p2 : Int = 0
-  let mut v_7 : Int = 0
-  let mut v_9 : Int = 0
-  let mut v_38 : Int = 0
-  let mut v_40 : Int = 0
-  let mut v_3 : Int = 0
-  let mut v_11 : Int = 0
-  let mut v_33 : Int = 0
-  let mut v_36 : Int = 0
-  let mut among_var : Int = 0
-  let mut v_42 : Int = 0
-  let mut v_8 : Int = 0
-  let mut v_12 : Int = 0
-  let mut v_31 : Int = 0
-  let mut v_34 : Int = 0
-  let mut v_4 : Int = 0
-  let mut v_13 : Int = 0
-  let mut v_28 : Int = 0
-  let mut v_26 : Int = 0
-  let mut v_32 : Int = 0
-  let mut v_5 : Int = 0
-  let mut v_14 : Int = 0
-  let mut v_29 : Int = 0
-  let mut v_30 : Int = 0
-  let mut v_6 : Int = 0
-  let mut v_15 : Int = 0
-  let mut v_16 : Int = 0
-  let mut v_18 : Int = 0
-  let mut v_21 : Int = 0
-  let mut v_17 : Int = 0
-  let mut v_19 : Int = 0
-  let mut v_22 : Int = 0
-  let mut v_20 : Int = 0
-  let mut v_23 : Int = 0
-  let mut v_24 : Int = 0
+  let mut v_1 : Int32 = 0
+  let mut v_2 : Int32 = 0
+  let mut v_10 : Int32 = 0
+  let mut v_37 : Int32 = 0
+  let mut v_39 : Int32 = 0
+  let mut v_41 : Int32 = 0
+  let mut i_pV : Int32 = 0
+  let mut i_p1 : Int32 = 0
+  let mut i_p2 : Int32 = 0
+  let mut v_7 : Int32 = 0
+  let mut v_9 : Int32 = 0
+  let mut v_38 : Int32 = 0
+  let mut v_40 : Int32 = 0
+  let mut v_3 : Int32 = 0
+  let mut v_11 : Int32 = 0
+  let mut v_33 : Int32 = 0
+  let mut v_36 : Int32 = 0
+  let mut among_var : Int32 = 0
+  let mut v_42 : Int32 = 0
+  let mut v_8 : Int32 = 0
+  let mut v_12 : Int32 = 0
+  let mut v_31 : Int32 = 0
+  let mut v_34 : Int32 = 0
+  let mut v_4 : Int32 = 0
+  let mut v_13 : Int32 = 0
+  let mut v_28 : Int32 = 0
+  let mut v_26 : Int32 = 0
+  let mut v_32 : Int32 = 0
+  let mut v_5 : Int32 = 0
+  let mut v_14 : Int32 = 0
+  let mut v_29 : Int32 = 0
+  let mut v_30 : Int32 = 0
+  let mut v_6 : Int32 = 0
+  let mut v_15 : Int32 = 0
+  let mut v_16 : Int32 = 0
+  let mut v_18 : Int32 = 0
+  let mut v_21 : Int32 = 0
+  let mut v_17 : Int32 = 0
+  let mut v_19 : Int32 = 0
+  let mut v_22 : Int32 = 0
+  let mut v_20 : Int32 = 0
+  let mut v_23 : Int32 = 0
+  let mut v_24 : Int32 = 0
   v_1 = e.cursor
   try {
     e.bra = e.cursor
     while true {
       try {
-        if !(@rt.in_grouping(e, g_elision_char)) {
+        if !@rt.in_grouping(e, g_elision_char) {
           raise @rt.Lab1
         }
         break
@@ -283,12 +283,12 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      if !(@rt.eq_s(e, "qu")) {
+      if !@rt.eq_s(e, "qu") {
         raise @rt.Lab0
       }
       break
     }
-    if (e.cursor == e.limit || e.current[e.cursor] != '\'') {
+    if e.cursor == e.limit || e.current[e.cursor] != '\'' {
       raise @rt.Lab0
     }
     e.cursor += 1
@@ -313,19 +313,19 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
             while true {
               v_5 = e.cursor
               try {
-                if !(@rt.in_grouping(e, g_v)) {
+                if !@rt.in_grouping(e, g_v) {
                   raise @rt.Lab3
                 }
                 e.bra = e.cursor
                 while true {
                   v_6 = e.cursor
                   try {
-                    if (e.cursor == e.limit || e.current[e.cursor] != 'u') {
+                    if e.cursor == e.limit || e.current[e.cursor] != 'u' {
                       raise @rt.Lab4
                     }
                     e.cursor += 1
                     e.ket = e.cursor
-                    if !(@rt.in_grouping(e, g_v)) {
+                    if !@rt.in_grouping(e, g_v) {
                       raise @rt.Lab4
                     }
                     @rt.slice_from(e, "U")
@@ -336,12 +336,12 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
                   }
                   e.cursor = v_6
                   try {
-                    if (e.cursor == e.limit || e.current[e.cursor] != 'i') {
+                    if e.cursor == e.limit || e.current[e.cursor] != 'i' {
                       raise @rt.Lab4
                     }
                     e.cursor += 1
                     e.ket = e.cursor
-                    if !(@rt.in_grouping(e, g_v)) {
+                    if !@rt.in_grouping(e, g_v) {
                       raise @rt.Lab4
                     }
                     @rt.slice_from(e, "I")
@@ -351,7 +351,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
                     err => raise err
                   }
                   e.cursor = v_6
-                  if (e.cursor == e.limit || e.current[e.cursor] != 'y') {
+                  if e.cursor == e.limit || e.current[e.cursor] != 'y' {
                     raise @rt.Lab3
                   }
                   e.cursor += 1
@@ -367,7 +367,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
               e.cursor = v_5
               try {
                 e.bra = e.cursor
-                if (e.cursor == e.limit || e.current[e.cursor] != 'ë') {
+                if e.cursor == e.limit || e.current[e.cursor] != 'ë' {
                   raise @rt.Lab3
                 }
                 e.cursor += 1
@@ -381,7 +381,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
               e.cursor = v_5
               try {
                 e.bra = e.cursor
-                if (e.cursor == e.limit || e.current[e.cursor] != 'ï') {
+                if e.cursor == e.limit || e.current[e.cursor] != 'ï' {
                   raise @rt.Lab3
                 }
                 e.cursor += 1
@@ -395,12 +395,12 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
               e.cursor = v_5
               try {
                 e.bra = e.cursor
-                if (e.cursor == e.limit || e.current[e.cursor] != 'y') {
+                if e.cursor == e.limit || e.current[e.cursor] != 'y' {
                   raise @rt.Lab3
                 }
                 e.cursor += 1
                 e.ket = e.cursor
-                if !(@rt.in_grouping(e, g_v)) {
+                if !@rt.in_grouping(e, g_v) {
                   raise @rt.Lab3
                 }
                 @rt.slice_from(e, "Y")
@@ -410,12 +410,12 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
                 err => raise err
               }
               e.cursor = v_5
-              if (e.cursor == e.limit || e.current[e.cursor] != 'q') {
+              if e.cursor == e.limit || e.current[e.cursor] != 'q' {
                 raise @rt.Lab2
               }
               e.cursor += 1
               e.bra = e.cursor
-              if (e.cursor == e.limit || e.current[e.cursor] != 'u') {
+              if e.cursor == e.limit || e.current[e.cursor] != 'u' {
                 raise @rt.Lab2
               }
               e.cursor += 1
@@ -457,10 +457,10 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
       while true {
         v_8 = e.cursor
         try {
-          if !(@rt.in_grouping(e, g_v)) {
+          if !@rt.in_grouping(e, g_v) {
             raise @rt.Lab2
           }
-          if !(@rt.in_grouping(e, g_v)) {
+          if !@rt.in_grouping(e, g_v) {
             raise @rt.Lab2
           }
           if e.cursor >= e.limit {
@@ -479,7 +479,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
             raise @rt.Lab2
           }
           if among_var == 1 {
-            if !(@rt.in_grouping(e, g_v)) {
+            if !@rt.in_grouping(e, g_v) {
               raise @rt.Lab2
             }
           }
@@ -493,7 +493,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
           raise @rt.Lab1
         }
         e.cursor += 1
-        if !(@rt.go_out_grouping(e, g_v)) {
+        if !@rt.go_out_grouping(e, g_v) {
           raise @rt.Lab1
         }
         e.cursor += 1
@@ -507,20 +507,20 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
     e.cursor = v_7
     v_9 = e.cursor
     try {
-      if !(@rt.go_out_grouping(e, g_v)) {
+      if !@rt.go_out_grouping(e, g_v) {
         raise @rt.Lab1
       }
       e.cursor += 1
-      if !(@rt.go_in_grouping(e, g_v)) {
+      if !@rt.go_in_grouping(e, g_v) {
         raise @rt.Lab1
       }
       e.cursor += 1
       i_p1 = e.cursor
-      if !(@rt.go_out_grouping(e, g_v)) {
+      if !@rt.go_out_grouping(e, g_v) {
         raise @rt.Lab1
       }
       e.cursor += 1
-      if !(@rt.go_in_grouping(e, g_v)) {
+      if !@rt.go_in_grouping(e, g_v) {
         raise @rt.Lab1
       }
       e.cursor += 1
@@ -536,14 +536,14 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
   }
   e.limit_backward = e.cursor
   e.cursor = e.limit
-  v_10 = (e.limit - e.cursor)
+  v_10 = e.limit - e.cursor
   try {
     while true {
-      v_11 = (e.limit - e.cursor)
+      v_11 = e.limit - e.cursor
       try {
-        v_12 = (e.limit - e.cursor)
+        v_12 = e.limit - e.cursor
         while true {
-          v_13 = (e.limit - e.cursor)
+          v_13 = e.limit - e.cursor
           try {
             e.ket = e.cursor
             among_var = @rt.find_among_b(e, a_4)
@@ -561,16 +561,16 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
                 raise @rt.Lab2
               }
               @rt.slice_del(e)
-              v_14 = (e.limit - e.cursor)
+              v_14 = e.limit - e.cursor
               try {
                 e.ket = e.cursor
-                if !(@rt.eq_s_b(e, "ic")) {
-                  e.cursor = (e.limit - v_14)
+                if !@rt.eq_s_b(e, "ic") {
+                  e.cursor = e.limit - v_14
                   raise @rt.Lab3
                 }
                 e.bra = e.cursor
                 while true {
-                  v_15 = (e.limit - e.cursor)
+                  v_15 = e.limit - e.cursor
                   try {
                     if i_p2 > e.cursor {
                       raise @rt.Lab4
@@ -581,7 +581,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
                     @rt.Lab4 => ()
                     err => raise err
                   }
-                  e.cursor = (e.limit - v_15)
+                  e.cursor = e.limit - v_15
                   @rt.slice_from(e, "iqU")
                   break
                 }
@@ -609,35 +609,35 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
                 raise @rt.Lab2
               }
               @rt.slice_del(e)
-              v_16 = (e.limit - e.cursor)
+              v_16 = e.limit - e.cursor
               try {
                 e.ket = e.cursor
                 among_var = @rt.find_among_b(e, a_2)
                 if among_var == 0 {
-                  e.cursor = (e.limit - v_16)
+                  e.cursor = e.limit - v_16
                   raise @rt.Lab3
                 }
                 e.bra = e.cursor
                 if among_var == 1 {
                   if i_p2 > e.cursor {
-                    e.cursor = (e.limit - v_16)
+                    e.cursor = e.limit - v_16
                     raise @rt.Lab3
                   }
                   @rt.slice_del(e)
                   e.ket = e.cursor
-                  if !(@rt.eq_s_b(e, "at")) {
-                    e.cursor = (e.limit - v_16)
+                  if !@rt.eq_s_b(e, "at") {
+                    e.cursor = e.limit - v_16
                     raise @rt.Lab3
                   }
                   e.bra = e.cursor
                   if i_p2 > e.cursor {
-                    e.cursor = (e.limit - v_16)
+                    e.cursor = e.limit - v_16
                     raise @rt.Lab3
                   }
                   @rt.slice_del(e)
                 } else if among_var == 2 {
                   while true {
-                    v_17 = (e.limit - e.cursor)
+                    v_17 = e.limit - e.cursor
                     try {
                       if i_p2 > e.cursor {
                         raise @rt.Lab4
@@ -648,9 +648,9 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
                       @rt.Lab4 => ()
                       err => raise err
                     }
-                    e.cursor = (e.limit - v_17)
+                    e.cursor = e.limit - v_17
                     if i_p1 > e.cursor {
-                      e.cursor = (e.limit - v_16)
+                      e.cursor = e.limit - v_16
                       raise @rt.Lab3
                     }
                     @rt.slice_from(e, "eux")
@@ -658,13 +658,13 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
                   }
                 } else if among_var == 3 {
                   if i_p2 > e.cursor {
-                    e.cursor = (e.limit - v_16)
+                    e.cursor = e.limit - v_16
                     raise @rt.Lab3
                   }
                   @rt.slice_del(e)
                 } else {
                   if i_pV > e.cursor {
-                    e.cursor = (e.limit - v_16)
+                    e.cursor = e.limit - v_16
                     raise @rt.Lab3
                   }
                   @rt.slice_from(e, "i")
@@ -678,18 +678,18 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
                 raise @rt.Lab2
               }
               @rt.slice_del(e)
-              v_18 = (e.limit - e.cursor)
+              v_18 = e.limit - e.cursor
               try {
                 e.ket = e.cursor
                 among_var = @rt.find_among_b(e, a_3)
                 if among_var == 0 {
-                  e.cursor = (e.limit - v_18)
+                  e.cursor = e.limit - v_18
                   raise @rt.Lab3
                 }
                 e.bra = e.cursor
                 if among_var == 1 {
                   while true {
-                    v_19 = (e.limit - e.cursor)
+                    v_19 = e.limit - e.cursor
                     try {
                       if i_p2 > e.cursor {
                         raise @rt.Lab4
@@ -700,13 +700,13 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
                       @rt.Lab4 => ()
                       err => raise err
                     }
-                    e.cursor = (e.limit - v_19)
+                    e.cursor = e.limit - v_19
                     @rt.slice_from(e, "abl")
                     break
                   }
                 } else if among_var == 2 {
                   while true {
-                    v_20 = (e.limit - e.cursor)
+                    v_20 = e.limit - e.cursor
                     try {
                       if i_p2 > e.cursor {
                         raise @rt.Lab4
@@ -717,13 +717,13 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
                       @rt.Lab4 => ()
                       err => raise err
                     }
-                    e.cursor = (e.limit - v_20)
+                    e.cursor = e.limit - v_20
                     @rt.slice_from(e, "iqU")
                     break
                   }
                 } else {
                   if i_p2 > e.cursor {
-                    e.cursor = (e.limit - v_18)
+                    e.cursor = e.limit - v_18
                     raise @rt.Lab3
                   }
                   @rt.slice_del(e)
@@ -737,27 +737,27 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
                 raise @rt.Lab2
               }
               @rt.slice_del(e)
-              v_21 = (e.limit - e.cursor)
+              v_21 = e.limit - e.cursor
               try {
                 e.ket = e.cursor
-                if !(@rt.eq_s_b(e, "at")) {
-                  e.cursor = (e.limit - v_21)
+                if !@rt.eq_s_b(e, "at") {
+                  e.cursor = e.limit - v_21
                   raise @rt.Lab3
                 }
                 e.bra = e.cursor
                 if i_p2 > e.cursor {
-                  e.cursor = (e.limit - v_21)
+                  e.cursor = e.limit - v_21
                   raise @rt.Lab3
                 }
                 @rt.slice_del(e)
                 e.ket = e.cursor
-                if !(@rt.eq_s_b(e, "ic")) {
-                  e.cursor = (e.limit - v_21)
+                if !@rt.eq_s_b(e, "ic") {
+                  e.cursor = e.limit - v_21
                   raise @rt.Lab3
                 }
                 e.bra = e.cursor
                 while true {
-                  v_22 = (e.limit - e.cursor)
+                  v_22 = e.limit - e.cursor
                   try {
                     if i_p2 > e.cursor {
                       raise @rt.Lab4
@@ -768,7 +768,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
                     @rt.Lab4 => ()
                     err => raise err
                   }
-                  e.cursor = (e.limit - v_22)
+                  e.cursor = e.limit - v_22
                   @rt.slice_from(e, "iqU")
                   break
                 }
@@ -784,13 +784,13 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
               }
               @rt.slice_from(e, "al")
             } else if among_var == 11 {
-              if !(@rt.in_grouping_b(e, g_oux_ending)) {
+              if !@rt.in_grouping_b(e, g_oux_ending) {
                 raise @rt.Lab2
               }
               @rt.slice_from(e, "ou")
             } else if among_var == 12 {
               while true {
-                v_23 = (e.limit - e.cursor)
+                v_23 = e.limit - e.cursor
                 try {
                   if i_p2 > e.cursor {
                     raise @rt.Lab3
@@ -801,7 +801,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
                   @rt.Lab3 => ()
                   err => raise err
                 }
-                e.cursor = (e.limit - v_23)
+                e.cursor = e.limit - v_23
                 if i_p1 > e.cursor {
                   raise @rt.Lab2
                 }
@@ -812,7 +812,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
               if i_p1 > e.cursor {
                 raise @rt.Lab2
               }
-              if !(@rt.out_grouping_b(e, g_v)) {
+              if !@rt.out_grouping_b(e, g_v) {
                 raise @rt.Lab2
               }
               @rt.slice_del(e)
@@ -829,14 +829,14 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
               @rt.slice_from(e, "ent")
               raise @rt.Lab2
             } else {
-              v_24 = (e.limit - e.cursor)
-              if !(@rt.in_grouping_b(e, g_v)) {
+              v_24 = e.limit - e.cursor
+              if !@rt.in_grouping_b(e, g_v) {
                 raise @rt.Lab2
               }
               if i_pV > e.cursor {
                 raise @rt.Lab2
               }
-              e.cursor = (e.limit - v_24)
+              e.cursor = e.limit - v_24
               @rt.slice_del(e)
               raise @rt.Lab2
             }
@@ -845,7 +845,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_13)
+          e.cursor = e.limit - v_13
           try {
             if e.cursor < i_pV {
               raise @rt.Lab2
@@ -859,7 +859,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
             }
             e.bra = e.cursor
             try {
-              if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'H') {
+              if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'H' {
                 raise @rt.Lab3
               }
               e.cursor -= 1
@@ -869,7 +869,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
               @rt.Lab3 => ()
               err => raise err
             }
-            if !(@rt.out_grouping_b(e, g_v)) {
+            if !@rt.out_grouping_b(e, g_v) {
               e.limit_backward = v_26
               raise @rt.Lab2
             }
@@ -880,7 +880,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_13)
+          e.cursor = e.limit - v_13
           if e.cursor < i_pV {
             raise @rt.Lab1
           }
@@ -902,15 +902,15 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
           } else if among_var == 2 {
             @rt.slice_del(e)
           } else if among_var == 3 {
-            v_29 = (e.limit - e.cursor)
+            v_29 = e.limit - e.cursor
             try {
-              if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'e') {
-                e.cursor = (e.limit - v_29)
+              if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'e' {
+                e.cursor = e.limit - v_29
                 raise @rt.Lab2
               }
               e.cursor -= 1
               if i_pV > e.cursor {
-                e.cursor = (e.limit - v_29)
+                e.cursor = e.limit - v_29
                 raise @rt.Lab2
               }
               e.bra = e.cursor
@@ -920,7 +920,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
             }
             @rt.slice_del(e)
           } else {
-            v_30 = (e.limit - e.cursor)
+            v_30 = e.limit - e.cursor
             try {
               among_var = @rt.find_among_b(e, a_6)
               if among_var == 0 {
@@ -940,19 +940,19 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
               @rt.Lab2 => ()
               err => raise err
             }
-            e.cursor = (e.limit - v_30)
+            e.cursor = e.limit - v_30
             @rt.slice_del(e)
           }
           break
         }
-        e.cursor = (e.limit - v_12)
-        v_31 = (e.limit - e.cursor)
+        e.cursor = e.limit - v_12
+        v_31 = e.limit - e.cursor
         try {
           e.ket = e.cursor
           while true {
-            v_32 = (e.limit - e.cursor)
+            v_32 = e.limit - e.cursor
             try {
-              if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'Y') {
+              if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'Y' {
                 raise @rt.Lab3
               }
               e.cursor -= 1
@@ -963,9 +963,9 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
               @rt.Lab3 => ()
               err => raise err
             }
-            e.cursor = (e.limit - v_32)
-            if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'ç') {
-              e.cursor = (e.limit - v_31)
+            e.cursor = e.limit - v_32
+            if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'ç' {
+              e.cursor = e.limit - v_31
               raise @rt.Lab2
             }
             e.cursor -= 1
@@ -982,20 +982,20 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_11)
-      v_33 = (e.limit - e.cursor)
+      e.cursor = e.limit - v_11
+      v_33 = e.limit - e.cursor
       try {
         e.ket = e.cursor
-        if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 's') {
-          e.cursor = (e.limit - v_33)
+        if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 's' {
+          e.cursor = e.limit - v_33
           raise @rt.Lab1
         }
         e.cursor -= 1
         e.bra = e.cursor
-        v_34 = (e.limit - e.cursor)
+        v_34 = e.limit - e.cursor
         while true {
           try {
-            if !(@rt.eq_s_b(e, "Hi")) {
+            if !@rt.eq_s_b(e, "Hi") {
               raise @rt.Lab2
             }
             break
@@ -1003,13 +1003,13 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          if !(@rt.out_grouping_b(e, g_keep_with_s)) {
-            e.cursor = (e.limit - v_33)
+          if !@rt.out_grouping_b(e, g_keep_with_s) {
+            e.cursor = e.limit - v_33
             raise @rt.Lab1
           }
           break
         }
-        e.cursor = (e.limit - v_34)
+        e.cursor = e.limit - v_34
         @rt.slice_del(e)
       } catch {
         @rt.Lab1 => ()
@@ -1034,7 +1034,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
         }
         while true {
           try {
-            if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 's') {
+            if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 's' {
               raise @rt.Lab1
             }
             e.cursor -= 1
@@ -1043,7 +1043,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
             @rt.Lab1 => ()
             err => raise err
           }
-          if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 't') {
+          if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 't' {
             e.limit_backward = v_36
             raise @rt.Lab0
           }
@@ -1063,14 +1063,14 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
     @rt.Lab0 => ()
     err => raise err
   }
-  e.cursor = (e.limit - v_10)
-  v_37 = (e.limit - e.cursor)
+  e.cursor = e.limit - v_10
+  v_37 = e.limit - e.cursor
   try {
-    v_38 = (e.limit - e.cursor)
+    v_38 = e.limit - e.cursor
     if @rt.find_among_b(e, a_9) == 0 {
       raise @rt.Lab0
     }
-    e.cursor = (e.limit - v_38)
+    e.cursor = e.limit - v_38
     e.ket = e.cursor
     if e.cursor <= e.limit_backward {
       raise @rt.Lab0
@@ -1082,13 +1082,13 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
     @rt.Lab0 => ()
     err => raise err
   }
-  e.cursor = (e.limit - v_37)
-  v_39 = (e.limit - e.cursor)
+  e.cursor = e.limit - v_37
+  v_39 = e.limit - e.cursor
   try {
     v_40 = 1
     while true {
       try {
-        if !(@rt.out_grouping_b(e, g_v)) {
+        if !@rt.out_grouping_b(e, g_v) {
           raise @rt.Lab1
         }
         v_40 -= 1
@@ -1105,7 +1105,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
     e.ket = e.cursor
     while true {
       try {
-        if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'é') {
+        if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'é' {
           raise @rt.Lab1
         }
         e.cursor -= 1
@@ -1114,7 +1114,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'è') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'è' {
         raise @rt.Lab0
       }
       e.cursor -= 1
@@ -1126,7 +1126,7 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
     @rt.Lab0 => ()
     err => raise err
   }
-  e.cursor = (e.limit - v_39)
+  e.cursor = e.limit - v_39
   e.cursor = e.limit_backward
   v_41 = e.cursor
   try {
@@ -1169,4 +1169,3 @@ fn stem_inner(p : French) -> Bool raise @rt.Lab {
   e.cursor = v_41
   return true
 }
-

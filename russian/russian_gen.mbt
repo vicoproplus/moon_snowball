@@ -8,7 +8,7 @@ pub struct Russian {
 
 ///|
 pub fn Russian::new() -> Russian {
-  { e: @rt.Env::new("") }
+  { e: @rt.Env::new(""), }
 }
 
 ///|
@@ -189,22 +189,22 @@ let a_7 : Array[@rt.Among] = [
 ///|
 fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
   let e = p.e
-  let mut v_1 : Int = 0
-  let mut v_6 : Int = 0
-  let mut v_7 : Int = 0
-  let mut v_12 : Int = 0
-  let mut v_13 : Int = 0
-  let mut v_14 : Int = 0
-  let mut i_pV : Int = 0
-  let mut i_p2 : Int = 0
-  let mut v_4 : Int = 0
-  let mut among_var : Int = 0
-  let mut v_2 : Int = 0
-  let mut v_8 : Int = 0
-  let mut v_9 : Int = 0
-  let mut v_10 : Int = 0
-  let mut v_3 : Int = 0
-  let mut v_11 : Int = 0
+  let mut v_1 : Int32 = 0
+  let mut v_6 : Int32 = 0
+  let mut v_7 : Int32 = 0
+  let mut v_12 : Int32 = 0
+  let mut v_13 : Int32 = 0
+  let mut v_14 : Int32 = 0
+  let mut i_pV : Int32 = 0
+  let mut i_p2 : Int32 = 0
+  let mut v_4 : Int32 = 0
+  let mut among_var : Int32 = 0
+  let mut v_2 : Int32 = 0
+  let mut v_8 : Int32 = 0
+  let mut v_9 : Int32 = 0
+  let mut v_10 : Int32 = 0
+  let mut v_3 : Int32 = 0
+  let mut v_11 : Int32 = 0
   v_1 = e.cursor
   try {
     while true {
@@ -214,7 +214,7 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
           v_3 = e.cursor
           try {
             e.bra = e.cursor
-            if (e.cursor == e.limit || e.current[e.cursor] != 'ё') {
+            if e.cursor == e.limit || e.current[e.cursor] != 'ё' {
               raise @rt.Lab2
             }
             e.cursor += 1
@@ -250,20 +250,20 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
     i_p2 = e.limit
     v_4 = e.cursor
     try {
-      if !(@rt.go_out_grouping(e, g_v)) {
+      if !@rt.go_out_grouping(e, g_v) {
         raise @rt.Lab1
       }
       e.cursor += 1
       i_pV = e.cursor
-      if !(@rt.go_in_grouping(e, g_v)) {
+      if !@rt.go_in_grouping(e, g_v) {
         raise @rt.Lab1
       }
       e.cursor += 1
-      if !(@rt.go_out_grouping(e, g_v)) {
+      if !@rt.go_out_grouping(e, g_v) {
         raise @rt.Lab1
       }
       e.cursor += 1
-      if !(@rt.go_in_grouping(e, g_v)) {
+      if !@rt.go_in_grouping(e, g_v) {
         raise @rt.Lab1
       }
       e.cursor += 1
@@ -284,10 +284,10 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
   }
   v_6 = e.limit_backward
   e.limit_backward = i_pV
-  v_7 = (e.limit - e.cursor)
+  v_7 = e.limit - e.cursor
   try {
     while true {
-      v_8 = (e.limit - e.cursor)
+      v_8 = e.limit - e.cursor
       try {
         e.ket = e.cursor
         among_var = @rt.find_among_b(e, a_0)
@@ -298,7 +298,7 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
         if among_var == 1 {
           while true {
             try {
-              if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'а') {
+              if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'а' {
                 raise @rt.Lab2
               }
               e.cursor -= 1
@@ -307,7 +307,7 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
               @rt.Lab2 => ()
               err => raise err
             }
-            if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'я') {
+            if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'я' {
               raise @rt.Lab1
             }
             e.cursor -= 1
@@ -322,12 +322,12 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_8)
-      v_9 = (e.limit - e.cursor)
+      e.cursor = e.limit - v_8
+      v_9 = e.limit - e.cursor
       try {
         e.ket = e.cursor
         if @rt.find_among_b(e, a_3) == 0 {
-          e.cursor = (e.limit - v_9)
+          e.cursor = e.limit - v_9
           raise @rt.Lab1
         }
         e.bra = e.cursor
@@ -337,7 +337,7 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
         err => raise err
       }
       while true {
-        v_10 = (e.limit - e.cursor)
+        v_10 = e.limit - e.cursor
         try {
           e.ket = e.cursor
           if @rt.find_among_b(e, a_1) == 0 {
@@ -345,19 +345,20 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
           }
           e.bra = e.cursor
           @rt.slice_del(e)
-          v_11 = (e.limit - e.cursor)
+          v_11 = e.limit - e.cursor
           try {
             e.ket = e.cursor
             among_var = @rt.find_among_b(e, a_2)
             if among_var == 0 {
-              e.cursor = (e.limit - v_11)
+              e.cursor = e.limit - v_11
               raise @rt.Lab2
             }
             e.bra = e.cursor
             if among_var == 1 {
               while true {
                 try {
-                  if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'а') {
+                  if e.cursor <= e.limit_backward ||
+                    e.current[e.cursor - 1] != 'а' {
                     raise @rt.Lab3
                   }
                   e.cursor -= 1
@@ -366,8 +367,9 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
                   @rt.Lab3 => ()
                   err => raise err
                 }
-                if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'я') {
-                  e.cursor = (e.limit - v_11)
+                if e.cursor <= e.limit_backward ||
+                  e.current[e.cursor - 1] != 'я' {
+                  e.cursor = e.limit - v_11
                   raise @rt.Lab2
                 }
                 e.cursor -= 1
@@ -386,7 +388,7 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
           @rt.Lab1 => ()
           err => raise err
         }
-        e.cursor = (e.limit - v_10)
+        e.cursor = e.limit - v_10
         try {
           e.ket = e.cursor
           among_var = @rt.find_among_b(e, a_4)
@@ -397,7 +399,8 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
           if among_var == 1 {
             while true {
               try {
-                if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'а') {
+                if e.cursor <= e.limit_backward ||
+                  e.current[e.cursor - 1] != 'а' {
                   raise @rt.Lab2
                 }
                 e.cursor -= 1
@@ -406,7 +409,7 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
                 @rt.Lab2 => ()
                 err => raise err
               }
-              if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'я') {
+              if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'я' {
                 raise @rt.Lab1
               }
               e.cursor -= 1
@@ -421,7 +424,7 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
           @rt.Lab1 => ()
           err => raise err
         }
-        e.cursor = (e.limit - v_10)
+        e.cursor = e.limit - v_10
         e.ket = e.cursor
         if @rt.find_among_b(e, a_5) == 0 {
           raise @rt.Lab0
@@ -436,12 +439,12 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
     @rt.Lab0 => ()
     err => raise err
   }
-  e.cursor = (e.limit - v_7)
-  v_12 = (e.limit - e.cursor)
+  e.cursor = e.limit - v_7
+  v_12 = e.limit - e.cursor
   try {
     e.ket = e.cursor
-    if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'и') {
-      e.cursor = (e.limit - v_12)
+    if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'и' {
+      e.cursor = e.limit - v_12
       raise @rt.Lab0
     }
     e.cursor -= 1
@@ -451,7 +454,7 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
     @rt.Lab0 => ()
     err => raise err
   }
-  v_13 = (e.limit - e.cursor)
+  v_13 = e.limit - e.cursor
   try {
     e.ket = e.cursor
     if @rt.find_among_b(e, a_6) == 0 {
@@ -466,8 +469,8 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
     @rt.Lab0 => ()
     err => raise err
   }
-  e.cursor = (e.limit - v_13)
-  v_14 = (e.limit - e.cursor)
+  e.cursor = e.limit - v_13
+  v_14 = e.limit - e.cursor
   try {
     e.ket = e.cursor
     among_var = @rt.find_among_b(e, a_7)
@@ -478,18 +481,18 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
     if among_var == 1 {
       @rt.slice_del(e)
       e.ket = e.cursor
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'н') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'н' {
         raise @rt.Lab0
       }
       e.cursor -= 1
       e.bra = e.cursor
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'н') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'н' {
         raise @rt.Lab0
       }
       e.cursor -= 1
       @rt.slice_del(e)
     } else if among_var == 2 {
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'н') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'н' {
         raise @rt.Lab0
       }
       e.cursor -= 1
@@ -501,9 +504,8 @@ fn stem_inner(p : Russian) -> Bool raise @rt.Lab {
     @rt.Lab0 => ()
     err => raise err
   }
-  e.cursor = (e.limit - v_14)
+  e.cursor = e.limit - v_14
   e.limit_backward = v_6
   e.cursor = e.limit_backward
   return true
 }
-

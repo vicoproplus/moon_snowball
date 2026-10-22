@@ -8,7 +8,7 @@ pub struct Turkish {
 
 ///|
 pub fn Turkish::new() -> Turkish {
-  { e: @rt.Env::new("") }
+  { e: @rt.Env::new(""), }
 }
 
 ///|
@@ -264,20 +264,20 @@ let as_23 : Array[String] = ["p", "ç", "t", "k"]
 ///|
 fn r_check_vowel_harmony(p : Turkish) -> Bool raise @rt.Lab {
   let e = p.e
-  let mut v_1 : Int = 0
-  let mut v_2 : Int = 0
-  v_1 = (e.limit - e.cursor)
-  if !(@rt.go_out_grouping_b(e, g_vowel)) {
+  let mut v_1 : Int32 = 0
+  let mut v_2 : Int32 = 0
+  v_1 = e.limit - e.cursor
+  if !@rt.go_out_grouping_b(e, g_vowel) {
     return false
   }
   while true {
-    v_2 = (e.limit - e.cursor)
+    v_2 = e.limit - e.cursor
     try {
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'a') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'a' {
         raise @rt.Lab0
       }
       e.cursor -= 1
-      if !(@rt.go_out_grouping_b(e, g_vowel1)) {
+      if !@rt.go_out_grouping_b(e, g_vowel1) {
         raise @rt.Lab0
       }
       break
@@ -285,13 +285,13 @@ fn r_check_vowel_harmony(p : Turkish) -> Bool raise @rt.Lab {
       @rt.Lab0 => ()
       err => raise err
     }
-    e.cursor = (e.limit - v_2)
+    e.cursor = e.limit - v_2
     try {
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'e') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'e' {
         raise @rt.Lab0
       }
       e.cursor -= 1
-      if !(@rt.go_out_grouping_b(e, g_vowel2)) {
+      if !@rt.go_out_grouping_b(e, g_vowel2) {
         raise @rt.Lab0
       }
       break
@@ -299,13 +299,13 @@ fn r_check_vowel_harmony(p : Turkish) -> Bool raise @rt.Lab {
       @rt.Lab0 => ()
       err => raise err
     }
-    e.cursor = (e.limit - v_2)
+    e.cursor = e.limit - v_2
     try {
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'ı') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'ı' {
         raise @rt.Lab0
       }
       e.cursor -= 1
-      if !(@rt.go_out_grouping_b(e, g_vowel3)) {
+      if !@rt.go_out_grouping_b(e, g_vowel3) {
         raise @rt.Lab0
       }
       break
@@ -313,13 +313,13 @@ fn r_check_vowel_harmony(p : Turkish) -> Bool raise @rt.Lab {
       @rt.Lab0 => ()
       err => raise err
     }
-    e.cursor = (e.limit - v_2)
+    e.cursor = e.limit - v_2
     try {
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'i') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'i' {
         raise @rt.Lab0
       }
       e.cursor -= 1
-      if !(@rt.go_out_grouping_b(e, g_vowel4)) {
+      if !@rt.go_out_grouping_b(e, g_vowel4) {
         raise @rt.Lab0
       }
       break
@@ -327,13 +327,13 @@ fn r_check_vowel_harmony(p : Turkish) -> Bool raise @rt.Lab {
       @rt.Lab0 => ()
       err => raise err
     }
-    e.cursor = (e.limit - v_2)
+    e.cursor = e.limit - v_2
     try {
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'o') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'o' {
         raise @rt.Lab0
       }
       e.cursor -= 1
-      if !(@rt.go_out_grouping_b(e, g_vowel5)) {
+      if !@rt.go_out_grouping_b(e, g_vowel5) {
         raise @rt.Lab0
       }
       break
@@ -341,13 +341,13 @@ fn r_check_vowel_harmony(p : Turkish) -> Bool raise @rt.Lab {
       @rt.Lab0 => ()
       err => raise err
     }
-    e.cursor = (e.limit - v_2)
+    e.cursor = e.limit - v_2
     try {
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'ö') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'ö' {
         raise @rt.Lab0
       }
       e.cursor -= 1
-      if !(@rt.go_out_grouping_b(e, g_vowel6)) {
+      if !@rt.go_out_grouping_b(e, g_vowel6) {
         raise @rt.Lab0
       }
       break
@@ -355,13 +355,13 @@ fn r_check_vowel_harmony(p : Turkish) -> Bool raise @rt.Lab {
       @rt.Lab0 => ()
       err => raise err
     }
-    e.cursor = (e.limit - v_2)
+    e.cursor = e.limit - v_2
     try {
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'u') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'u' {
         raise @rt.Lab0
       }
       e.cursor -= 1
-      if !(@rt.go_out_grouping_b(e, g_vowel5)) {
+      if !@rt.go_out_grouping_b(e, g_vowel5) {
         raise @rt.Lab0
       }
       break
@@ -369,46 +369,46 @@ fn r_check_vowel_harmony(p : Turkish) -> Bool raise @rt.Lab {
       @rt.Lab0 => ()
       err => raise err
     }
-    e.cursor = (e.limit - v_2)
-    if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'ü') {
+    e.cursor = e.limit - v_2
+    if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'ü' {
       return false
     }
     e.cursor -= 1
-    if !(@rt.go_out_grouping_b(e, g_vowel6)) {
+    if !@rt.go_out_grouping_b(e, g_vowel6) {
       return false
     }
     break
   }
-  e.cursor = (e.limit - v_1)
+  e.cursor = e.limit - v_1
   return true
 }
 
 ///|
 fn r_mark_suffix_with_optional_n_consonant(p : Turkish) -> Bool raise @rt.Lab {
   let e = p.e
-  let mut v_1 : Int = 0
-  let mut v_3 : Int = 0
-  let mut v_2 : Int = 0
+  let mut v_1 : Int32 = 0
+  let mut v_3 : Int32 = 0
+  let mut v_2 : Int32 = 0
   while true {
-    v_1 = (e.limit - e.cursor)
+    v_1 = e.limit - e.cursor
     try {
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'n') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'n' {
         raise @rt.Lab0
       }
       e.cursor -= 1
-      v_2 = (e.limit - e.cursor)
-      if !(@rt.in_grouping_b(e, g_vowel)) {
+      v_2 = e.limit - e.cursor
+      if !@rt.in_grouping_b(e, g_vowel) {
         raise @rt.Lab0
       }
-      e.cursor = (e.limit - v_2)
+      e.cursor = e.limit - v_2
       break
     } catch {
       @rt.Lab0 => ()
       err => raise err
     }
-    e.cursor = (e.limit - v_1)
+    e.cursor = e.limit - v_1
     try {
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'n') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'n' {
         raise @rt.Lab0
       }
       e.cursor -= 1
@@ -417,15 +417,15 @@ fn r_mark_suffix_with_optional_n_consonant(p : Turkish) -> Bool raise @rt.Lab {
       @rt.Lab0 => ()
       err => raise err
     }
-    v_3 = (e.limit - e.cursor)
+    v_3 = e.limit - e.cursor
     if e.cursor <= e.limit_backward {
       return false
     }
     e.cursor -= 1
-    if !(@rt.in_grouping_b(e, g_vowel)) {
+    if !@rt.in_grouping_b(e, g_vowel) {
       return false
     }
-    e.cursor = (e.limit - v_3)
+    e.cursor = e.limit - v_3
     break
   }
   return true
@@ -434,29 +434,29 @@ fn r_mark_suffix_with_optional_n_consonant(p : Turkish) -> Bool raise @rt.Lab {
 ///|
 fn r_mark_suffix_with_optional_y_consonant(p : Turkish) -> Bool raise @rt.Lab {
   let e = p.e
-  let mut v_1 : Int = 0
-  let mut v_3 : Int = 0
-  let mut v_2 : Int = 0
+  let mut v_1 : Int32 = 0
+  let mut v_3 : Int32 = 0
+  let mut v_2 : Int32 = 0
   while true {
-    v_1 = (e.limit - e.cursor)
+    v_1 = e.limit - e.cursor
     try {
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'y') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'y' {
         raise @rt.Lab0
       }
       e.cursor -= 1
-      v_2 = (e.limit - e.cursor)
-      if !(@rt.in_grouping_b(e, g_vowel)) {
+      v_2 = e.limit - e.cursor
+      if !@rt.in_grouping_b(e, g_vowel) {
         raise @rt.Lab0
       }
-      e.cursor = (e.limit - v_2)
+      e.cursor = e.limit - v_2
       break
     } catch {
       @rt.Lab0 => ()
       err => raise err
     }
-    e.cursor = (e.limit - v_1)
+    e.cursor = e.limit - v_1
     try {
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'y') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'y' {
         raise @rt.Lab0
       }
       e.cursor -= 1
@@ -465,15 +465,15 @@ fn r_mark_suffix_with_optional_y_consonant(p : Turkish) -> Bool raise @rt.Lab {
       @rt.Lab0 => ()
       err => raise err
     }
-    v_3 = (e.limit - e.cursor)
+    v_3 = e.limit - e.cursor
     if e.cursor <= e.limit_backward {
       return false
     }
     e.cursor -= 1
-    if !(@rt.in_grouping_b(e, g_vowel)) {
+    if !@rt.in_grouping_b(e, g_vowel) {
       return false
     }
-    e.cursor = (e.limit - v_3)
+    e.cursor = e.limit - v_3
     break
   }
   return true
@@ -482,31 +482,31 @@ fn r_mark_suffix_with_optional_y_consonant(p : Turkish) -> Bool raise @rt.Lab {
 ///|
 fn r_mark_possessives(p : Turkish) -> Bool raise @rt.Lab {
   let e = p.e
-  let mut v_1 : Int = 0
-  let mut v_3 : Int = 0
-  let mut v_2 : Int = 0
+  let mut v_1 : Int32 = 0
+  let mut v_3 : Int32 = 0
+  let mut v_2 : Int32 = 0
   if @rt.find_among_b(e, a_0) == 0 {
     return false
   }
   while true {
-    v_1 = (e.limit - e.cursor)
+    v_1 = e.limit - e.cursor
     try {
-      if !(@rt.in_grouping_b(e, g_U)) {
+      if !@rt.in_grouping_b(e, g_U) {
         raise @rt.Lab0
       }
-      v_2 = (e.limit - e.cursor)
-      if !(@rt.out_grouping_b(e, g_vowel)) {
+      v_2 = e.limit - e.cursor
+      if !@rt.out_grouping_b(e, g_vowel) {
         raise @rt.Lab0
       }
-      e.cursor = (e.limit - v_2)
+      e.cursor = e.limit - v_2
       break
     } catch {
       @rt.Lab0 => ()
       err => raise err
     }
-    e.cursor = (e.limit - v_1)
+    e.cursor = e.limit - v_1
     try {
-      if !(@rt.in_grouping_b(e, g_U)) {
+      if !@rt.in_grouping_b(e, g_U) {
         raise @rt.Lab0
       }
       return false
@@ -514,15 +514,15 @@ fn r_mark_possessives(p : Turkish) -> Bool raise @rt.Lab {
       @rt.Lab0 => ()
       err => raise err
     }
-    v_3 = (e.limit - e.cursor)
+    v_3 = e.limit - e.cursor
     if e.cursor <= e.limit_backward {
       return false
     }
     e.cursor -= 1
-    if !(@rt.out_grouping_b(e, g_vowel)) {
+    if !@rt.out_grouping_b(e, g_vowel) {
       return false
     }
-    e.cursor = (e.limit - v_3)
+    e.cursor = e.limit - v_3
     break
   }
   return true
@@ -531,35 +531,35 @@ fn r_mark_possessives(p : Turkish) -> Bool raise @rt.Lab {
 ///|
 fn r_mark_sU(p : Turkish) -> Bool raise @rt.Lab {
   let e = p.e
-  let mut v_1 : Int = 0
-  let mut v_3 : Int = 0
-  let mut v_2 : Int = 0
-  if !(r_check_vowel_harmony(p)) {
+  let mut v_1 : Int32 = 0
+  let mut v_3 : Int32 = 0
+  let mut v_2 : Int32 = 0
+  if !r_check_vowel_harmony(p) {
     return false
   }
-  if !(@rt.in_grouping_b(e, g_U)) {
+  if !@rt.in_grouping_b(e, g_U) {
     return false
   }
   while true {
-    v_1 = (e.limit - e.cursor)
+    v_1 = e.limit - e.cursor
     try {
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 's') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 's' {
         raise @rt.Lab0
       }
       e.cursor -= 1
-      v_2 = (e.limit - e.cursor)
-      if !(@rt.in_grouping_b(e, g_vowel)) {
+      v_2 = e.limit - e.cursor
+      if !@rt.in_grouping_b(e, g_vowel) {
         raise @rt.Lab0
       }
-      e.cursor = (e.limit - v_2)
+      e.cursor = e.limit - v_2
       break
     } catch {
       @rt.Lab0 => ()
       err => raise err
     }
-    e.cursor = (e.limit - v_1)
+    e.cursor = e.limit - v_1
     try {
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 's') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 's' {
         raise @rt.Lab0
       }
       e.cursor -= 1
@@ -568,15 +568,15 @@ fn r_mark_sU(p : Turkish) -> Bool raise @rt.Lab {
       @rt.Lab0 => ()
       err => raise err
     }
-    v_3 = (e.limit - e.cursor)
+    v_3 = e.limit - e.cursor
     if e.cursor <= e.limit_backward {
       return false
     }
     e.cursor -= 1
-    if !(@rt.in_grouping_b(e, g_vowel)) {
+    if !@rt.in_grouping_b(e, g_vowel) {
       return false
     }
-    e.cursor = (e.limit - v_3)
+    e.cursor = e.limit - v_3
     break
   }
   return true
@@ -591,7 +591,7 @@ fn r_mark_lArI(p : Turkish) -> Bool {
 ///|
 fn r_mark_nUn(p : Turkish) -> Bool raise @rt.Lab {
   let e = p.e
-  if !(r_check_vowel_harmony(p)) {
+  if !r_check_vowel_harmony(p) {
     return false
   }
   if @rt.find_among_b(e, a_3) == 0 {
@@ -603,7 +603,7 @@ fn r_mark_nUn(p : Turkish) -> Bool raise @rt.Lab {
 ///|
 fn r_mark_DA(p : Turkish) -> Bool raise @rt.Lab {
   let e = p.e
-  if !(r_check_vowel_harmony(p)) {
+  if !r_check_vowel_harmony(p) {
     return false
   }
   return @rt.find_among_b(e, a_6) != 0
@@ -612,7 +612,7 @@ fn r_mark_DA(p : Turkish) -> Bool raise @rt.Lab {
 ///|
 fn r_mark_ndA(p : Turkish) -> Bool raise @rt.Lab {
   let e = p.e
-  if !(r_check_vowel_harmony(p)) {
+  if !r_check_vowel_harmony(p) {
     return false
   }
   return @rt.find_among_b(e, a_7) != 0
@@ -621,7 +621,7 @@ fn r_mark_ndA(p : Turkish) -> Bool raise @rt.Lab {
 ///|
 fn r_mark_yUm(p : Turkish) -> Bool raise @rt.Lab {
   let e = p.e
-  if !(r_check_vowel_harmony(p)) {
+  if !r_check_vowel_harmony(p) {
     return false
   }
   if @rt.find_among_b(e, a_12) == 0 {
@@ -633,7 +633,7 @@ fn r_mark_yUm(p : Turkish) -> Bool raise @rt.Lab {
 ///|
 fn r_mark_sUn(p : Turkish) -> Bool raise @rt.Lab {
   let e = p.e
-  if !(r_check_vowel_harmony(p)) {
+  if !r_check_vowel_harmony(p) {
     return false
   }
   return @rt.find_among_b(e, a_13) != 0
@@ -642,7 +642,7 @@ fn r_mark_sUn(p : Turkish) -> Bool raise @rt.Lab {
 ///|
 fn r_mark_yUz(p : Turkish) -> Bool raise @rt.Lab {
   let e = p.e
-  if !(r_check_vowel_harmony(p)) {
+  if !r_check_vowel_harmony(p) {
     return false
   }
   if @rt.find_among_b(e, a_14) == 0 {
@@ -660,7 +660,7 @@ fn r_mark_sUnUz(p : Turkish) -> Bool {
 ///|
 fn r_mark_lAr(p : Turkish) -> Bool raise @rt.Lab {
   let e = p.e
-  if !(r_check_vowel_harmony(p)) {
+  if !r_check_vowel_harmony(p) {
     return false
   }
   return @rt.find_among_b(e, a_16) != 0
@@ -669,7 +669,7 @@ fn r_mark_lAr(p : Turkish) -> Bool raise @rt.Lab {
 ///|
 fn r_mark_DUr(p : Turkish) -> Bool raise @rt.Lab {
   let e = p.e
-  if !(r_check_vowel_harmony(p)) {
+  if !r_check_vowel_harmony(p) {
     return false
   }
   return @rt.find_among_b(e, a_18) != 0
@@ -678,7 +678,7 @@ fn r_mark_DUr(p : Turkish) -> Bool raise @rt.Lab {
 ///|
 fn r_mark_yDU(p : Turkish) -> Bool raise @rt.Lab {
   let e = p.e
-  if !(r_check_vowel_harmony(p)) {
+  if !r_check_vowel_harmony(p) {
     return false
   }
   if @rt.find_among_b(e, a_20) == 0 {
@@ -699,7 +699,7 @@ fn r_mark_ysA(p : Turkish) -> Bool raise @rt.Lab {
 ///|
 fn r_mark_ymUs_(p : Turkish) -> Bool raise @rt.Lab {
   let e = p.e
-  if !(r_check_vowel_harmony(p)) {
+  if !r_check_vowel_harmony(p) {
     return false
   }
   if @rt.find_among_b(e, a_22) == 0 {
@@ -711,44 +711,44 @@ fn r_mark_ymUs_(p : Turkish) -> Bool raise @rt.Lab {
 ///|
 fn r_stem_suffix_chain_before_ki(p : Turkish) -> Bool raise @rt.Lab {
   let e = p.e
-  let mut v_1 : Int = 0
-  let mut v_2 : Int = 0
-  let mut v_6 : Int = 0
-  let mut v_10 : Int = 0
-  let mut v_11 : Int = 0
-  let mut v_3 : Int = 0
-  let mut v_5 : Int = 0
-  let mut v_7 : Int = 0
-  let mut v_4 : Int = 0
-  let mut v_9 : Int = 0
-  let mut v_8 : Int = 0
+  let mut v_1 : Int32 = 0
+  let mut v_2 : Int32 = 0
+  let mut v_6 : Int32 = 0
+  let mut v_10 : Int32 = 0
+  let mut v_11 : Int32 = 0
+  let mut v_3 : Int32 = 0
+  let mut v_5 : Int32 = 0
+  let mut v_7 : Int32 = 0
+  let mut v_4 : Int32 = 0
+  let mut v_9 : Int32 = 0
+  let mut v_8 : Int32 = 0
   e.ket = e.cursor
-  if !(@rt.eq_s_b(e, "ki")) {
+  if !@rt.eq_s_b(e, "ki") {
     return false
   }
   while true {
-    v_1 = (e.limit - e.cursor)
+    v_1 = e.limit - e.cursor
     try {
-      if !(r_mark_DA(p)) {
+      if !r_mark_DA(p) {
         raise @rt.Lab0
       }
       e.bra = e.cursor
       @rt.slice_del(e)
-      v_2 = (e.limit - e.cursor)
+      v_2 = e.limit - e.cursor
       try {
         e.ket = e.cursor
         while true {
-          v_3 = (e.limit - e.cursor)
+          v_3 = e.limit - e.cursor
           try {
-            if !(r_mark_lAr(p)) {
+            if !r_mark_lAr(p) {
               raise @rt.Lab2
             }
             e.bra = e.cursor
             @rt.slice_del(e)
-            v_4 = (e.limit - e.cursor)
+            v_4 = e.limit - e.cursor
             try {
-              if !(r_stem_suffix_chain_before_ki(p)) {
-                e.cursor = (e.limit - v_4)
+              if !r_stem_suffix_chain_before_ki(p) {
+                e.cursor = e.limit - v_4
                 raise @rt.Lab3
               }
             } catch {
@@ -760,24 +760,24 @@ fn r_stem_suffix_chain_before_ki(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_3)
-          if !(r_mark_possessives(p)) {
-            e.cursor = (e.limit - v_2)
+          e.cursor = e.limit - v_3
+          if !r_mark_possessives(p) {
+            e.cursor = e.limit - v_2
             raise @rt.Lab1
           }
           e.bra = e.cursor
           @rt.slice_del(e)
-          v_5 = (e.limit - e.cursor)
+          v_5 = e.limit - e.cursor
           try {
             e.ket = e.cursor
-            if !(r_mark_lAr(p)) {
-              e.cursor = (e.limit - v_5)
+            if !r_mark_lAr(p) {
+              e.cursor = e.limit - v_5
               raise @rt.Lab2
             }
             e.bra = e.cursor
             @rt.slice_del(e)
-            if !(r_stem_suffix_chain_before_ki(p)) {
-              e.cursor = (e.limit - v_5)
+            if !r_stem_suffix_chain_before_ki(p) {
+              e.cursor = e.limit - v_5
               raise @rt.Lab2
             }
           } catch {
@@ -795,20 +795,20 @@ fn r_stem_suffix_chain_before_ki(p : Turkish) -> Bool raise @rt.Lab {
       @rt.Lab0 => ()
       err => raise err
     }
-    e.cursor = (e.limit - v_1)
+    e.cursor = e.limit - v_1
     try {
-      if !(r_mark_nUn(p)) {
+      if !r_mark_nUn(p) {
         raise @rt.Lab0
       }
       e.bra = e.cursor
       @rt.slice_del(e)
-      v_6 = (e.limit - e.cursor)
+      v_6 = e.limit - e.cursor
       try {
         e.ket = e.cursor
         while true {
-          v_7 = (e.limit - e.cursor)
+          v_7 = e.limit - e.cursor
           try {
-            if !(r_mark_lArI(p)) {
+            if !r_mark_lArI(p) {
               raise @rt.Lab2
             }
             e.bra = e.cursor
@@ -818,13 +818,13 @@ fn r_stem_suffix_chain_before_ki(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_7)
+          e.cursor = e.limit - v_7
           try {
             e.ket = e.cursor
             while true {
-              v_8 = (e.limit - e.cursor)
+              v_8 = e.limit - e.cursor
               try {
-                if !(r_mark_possessives(p)) {
+                if !r_mark_possessives(p) {
                   raise @rt.Lab3
                 }
                 break
@@ -832,25 +832,25 @@ fn r_stem_suffix_chain_before_ki(p : Turkish) -> Bool raise @rt.Lab {
                 @rt.Lab3 => ()
                 err => raise err
               }
-              e.cursor = (e.limit - v_8)
-              if !(r_mark_sU(p)) {
+              e.cursor = e.limit - v_8
+              if !r_mark_sU(p) {
                 raise @rt.Lab2
               }
               break
             }
             e.bra = e.cursor
             @rt.slice_del(e)
-            v_9 = (e.limit - e.cursor)
+            v_9 = e.limit - e.cursor
             try {
               e.ket = e.cursor
-              if !(r_mark_lAr(p)) {
-                e.cursor = (e.limit - v_9)
+              if !r_mark_lAr(p) {
+                e.cursor = e.limit - v_9
                 raise @rt.Lab3
               }
               e.bra = e.cursor
               @rt.slice_del(e)
-              if !(r_stem_suffix_chain_before_ki(p)) {
-                e.cursor = (e.limit - v_9)
+              if !r_stem_suffix_chain_before_ki(p) {
+                e.cursor = e.limit - v_9
                 raise @rt.Lab3
               }
             } catch {
@@ -862,9 +862,9 @@ fn r_stem_suffix_chain_before_ki(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_7)
-          if !(r_stem_suffix_chain_before_ki(p)) {
-            e.cursor = (e.limit - v_6)
+          e.cursor = e.limit - v_7
+          if !r_stem_suffix_chain_before_ki(p) {
+            e.cursor = e.limit - v_6
             raise @rt.Lab1
           }
           break
@@ -878,14 +878,14 @@ fn r_stem_suffix_chain_before_ki(p : Turkish) -> Bool raise @rt.Lab {
       @rt.Lab0 => ()
       err => raise err
     }
-    e.cursor = (e.limit - v_1)
-    if !(r_mark_ndA(p)) {
+    e.cursor = e.limit - v_1
+    if !r_mark_ndA(p) {
       return false
     }
     while true {
-      v_10 = (e.limit - e.cursor)
+      v_10 = e.limit - e.cursor
       try {
-        if !(r_mark_lArI(p)) {
+        if !r_mark_lArI(p) {
           raise @rt.Lab0
         }
         e.bra = e.cursor
@@ -895,24 +895,24 @@ fn r_stem_suffix_chain_before_ki(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab0 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_10)
+      e.cursor = e.limit - v_10
       try {
-        if !(r_mark_sU(p)) {
+        if !r_mark_sU(p) {
           raise @rt.Lab0
         }
         e.bra = e.cursor
         @rt.slice_del(e)
-        v_11 = (e.limit - e.cursor)
+        v_11 = e.limit - e.cursor
         try {
           e.ket = e.cursor
-          if !(r_mark_lAr(p)) {
-            e.cursor = (e.limit - v_11)
+          if !r_mark_lAr(p) {
+            e.cursor = e.limit - v_11
             raise @rt.Lab1
           }
           e.bra = e.cursor
           @rt.slice_del(e)
-          if !(r_stem_suffix_chain_before_ki(p)) {
-            e.cursor = (e.limit - v_11)
+          if !r_stem_suffix_chain_before_ki(p) {
+            e.cursor = e.limit - v_11
             raise @rt.Lab1
           }
         } catch {
@@ -924,8 +924,8 @@ fn r_stem_suffix_chain_before_ki(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab0 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_10)
-      if !(r_stem_suffix_chain_before_ki(p)) {
+      e.cursor = e.limit - v_10
+      if !r_stem_suffix_chain_before_ki(p) {
         return false
       }
       break
@@ -938,57 +938,57 @@ fn r_stem_suffix_chain_before_ki(p : Turkish) -> Bool raise @rt.Lab {
 ///|
 fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
   let e = p.e
-  let mut v_5 : Int = 0
-  let mut v_6 : Int = 0
-  let mut v_17 : Int = 0
-  let mut v_45 : Int = 0
-  let mut v_47 : Int = 0
-  let mut v_49 : Int = 0
-  let mut v_1 : Int = 0
-  let mut v_3 : Int = 0
+  let mut v_5 : Int32 = 0
+  let mut v_6 : Int32 = 0
+  let mut v_17 : Int32 = 0
+  let mut v_45 : Int32 = 0
+  let mut v_47 : Int32 = 0
+  let mut v_49 : Int32 = 0
+  let mut v_1 : Int32 = 0
+  let mut v_3 : Int32 = 0
   let mut b_continue_stemming_noun_suffixes : Bool = false
-  let mut v_46 : Int = 0
-  let mut among_var : Int = 0
-  let mut v_7 : Int = 0
-  let mut v_15 : Int = 0
-  let mut v_18 : Int = 0
-  let mut v_44 : Int = 0
-  let mut v_48 : Int = 0
-  let mut v_2 : Int = 0
-  let mut v_4 : Int = 0
-  let mut v_10 : Int = 0
-  let mut v_14 : Int = 0
-  let mut v_19 : Int = 0
-  let mut v_20 : Int = 0
-  let mut v_30 : Int = 0
-  let mut v_35 : Int = 0
-  let mut v_40 : Int = 0
-  let mut v_43 : Int = 0
-  let mut v_8 : Int = 0
-  let mut v_9 : Int = 0
-  let mut v_12 : Int = 0
-  let mut v_13 : Int = 0
-  let mut v_16 : Int = 0
-  let mut v_24 : Int = 0
-  let mut v_25 : Int = 0
-  let mut v_27 : Int = 0
-  let mut v_28 : Int = 0
-  let mut v_34 : Int = 0
-  let mut v_39 : Int = 0
-  let mut v_11 : Int = 0
-  let mut v_21 : Int = 0
-  let mut v_26 : Int = 0
-  let mut v_29 : Int = 0
-  let mut v_31 : Int = 0
-  let mut v_36 : Int = 0
-  let mut v_41 : Int = 0
-  let mut v_23 : Int = 0
-  let mut v_32 : Int = 0
-  let mut v_33 : Int = 0
-  let mut v_38 : Int = 0
-  let mut v_42 : Int = 0
-  let mut v_22 : Int = 0
-  let mut v_37 : Int = 0
+  let mut v_46 : Int32 = 0
+  let mut among_var : Int32 = 0
+  let mut v_7 : Int32 = 0
+  let mut v_15 : Int32 = 0
+  let mut v_18 : Int32 = 0
+  let mut v_44 : Int32 = 0
+  let mut v_48 : Int32 = 0
+  let mut v_2 : Int32 = 0
+  let mut v_4 : Int32 = 0
+  let mut v_10 : Int32 = 0
+  let mut v_14 : Int32 = 0
+  let mut v_19 : Int32 = 0
+  let mut v_20 : Int32 = 0
+  let mut v_30 : Int32 = 0
+  let mut v_35 : Int32 = 0
+  let mut v_40 : Int32 = 0
+  let mut v_43 : Int32 = 0
+  let mut v_8 : Int32 = 0
+  let mut v_9 : Int32 = 0
+  let mut v_12 : Int32 = 0
+  let mut v_13 : Int32 = 0
+  let mut v_16 : Int32 = 0
+  let mut v_24 : Int32 = 0
+  let mut v_25 : Int32 = 0
+  let mut v_27 : Int32 = 0
+  let mut v_28 : Int32 = 0
+  let mut v_34 : Int32 = 0
+  let mut v_39 : Int32 = 0
+  let mut v_11 : Int32 = 0
+  let mut v_21 : Int32 = 0
+  let mut v_26 : Int32 = 0
+  let mut v_29 : Int32 = 0
+  let mut v_31 : Int32 = 0
+  let mut v_36 : Int32 = 0
+  let mut v_41 : Int32 = 0
+  let mut v_23 : Int32 = 0
+  let mut v_32 : Int32 = 0
+  let mut v_33 : Int32 = 0
+  let mut v_38 : Int32 = 0
+  let mut v_42 : Int32 = 0
+  let mut v_22 : Int32 = 0
+  let mut v_37 : Int32 = 0
   try {
     v_1 = e.cursor
     try {
@@ -997,7 +997,7 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         v_2 = e.cursor
         try {
           try {
-            if (e.cursor == e.limit || e.current[e.cursor] != '\'') {
+            if e.cursor == e.limit || e.current[e.cursor] != '\'' {
               raise @rt.Lab3
             }
             e.cursor += 1
@@ -1027,14 +1027,14 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
     e.cursor = v_1
     v_3 = e.cursor
     try {
-      if (e.cursor + 2) > e.limit {
+      if e.cursor + 2 > e.limit {
         raise @rt.Lab1
       }
       e.cursor += 2
       while true {
         v_4 = e.cursor
         try {
-          if (e.cursor == e.limit || e.current[e.cursor] != '\'') {
+          if e.cursor == e.limit || e.current[e.cursor] != '\'' {
             raise @rt.Lab2
           }
           e.cursor += 1
@@ -1065,7 +1065,7 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
   }
   v_5 = e.cursor
   for _ in 0..<2 {
-    if !(@rt.go_out_grouping(e, g_vowel)) {
+    if !@rt.go_out_grouping(e, g_vowel) {
       return false
     }
     e.cursor += 1
@@ -1073,17 +1073,17 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
   e.cursor = v_5
   e.limit_backward = e.cursor
   e.cursor = e.limit
-  v_6 = (e.limit - e.cursor)
+  v_6 = e.limit - e.cursor
   try {
     e.ket = e.cursor
     b_continue_stemming_noun_suffixes = true
     while true {
-      v_7 = (e.limit - e.cursor)
+      v_7 = e.limit - e.cursor
       try {
         while true {
-          v_8 = (e.limit - e.cursor)
+          v_8 = e.limit - e.cursor
           try {
-            if !(r_mark_ymUs_(p)) {
+            if !r_mark_ymUs_(p) {
               raise @rt.Lab2
             }
             break
@@ -1091,9 +1091,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_8)
+          e.cursor = e.limit - v_8
           try {
-            if !(r_mark_yDU(p)) {
+            if !r_mark_yDU(p) {
               raise @rt.Lab2
             }
             break
@@ -1101,9 +1101,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_8)
+          e.cursor = e.limit - v_8
           try {
-            if !(r_mark_ysA(p)) {
+            if !r_mark_ysA(p) {
               raise @rt.Lab2
             }
             break
@@ -1111,11 +1111,11 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_8)
-          if !(@rt.eq_s_b(e, "ken")) {
+          e.cursor = e.limit - v_8
+          if !@rt.eq_s_b(e, "ken") {
             raise @rt.Lab1
           }
-          if !(r_mark_suffix_with_optional_y_consonant(p)) {
+          if !r_mark_suffix_with_optional_y_consonant(p) {
             raise @rt.Lab1
           }
           break
@@ -1125,15 +1125,15 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_7)
+      e.cursor = e.limit - v_7
       try {
         if @rt.find_among_b(e, a_19) == 0 {
           raise @rt.Lab1
         }
         while true {
-          v_9 = (e.limit - e.cursor)
+          v_9 = e.limit - e.cursor
           try {
-            if !(r_mark_sUnUz(p)) {
+            if !r_mark_sUnUz(p) {
               raise @rt.Lab2
             }
             break
@@ -1141,9 +1141,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_9)
+          e.cursor = e.limit - v_9
           try {
-            if !(r_mark_lAr(p)) {
+            if !r_mark_lAr(p) {
               raise @rt.Lab2
             }
             break
@@ -1151,9 +1151,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_9)
+          e.cursor = e.limit - v_9
           try {
-            if !(r_mark_yUm(p)) {
+            if !r_mark_yUm(p) {
               raise @rt.Lab2
             }
             break
@@ -1161,9 +1161,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_9)
+          e.cursor = e.limit - v_9
           try {
-            if !(r_mark_sUn(p)) {
+            if !r_mark_sUn(p) {
               raise @rt.Lab2
             }
             break
@@ -1171,9 +1171,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_9)
+          e.cursor = e.limit - v_9
           try {
-            if !(r_mark_yUz(p)) {
+            if !r_mark_yUz(p) {
               raise @rt.Lab2
             }
             break
@@ -1181,10 +1181,10 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_9)
+          e.cursor = e.limit - v_9
           break
         }
-        if !(r_mark_ymUs_(p)) {
+        if !r_mark_ymUs_(p) {
           raise @rt.Lab1
         }
         break
@@ -1192,20 +1192,20 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_7)
+      e.cursor = e.limit - v_7
       try {
-        if !(r_mark_lAr(p)) {
+        if !r_mark_lAr(p) {
           raise @rt.Lab1
         }
         e.bra = e.cursor
         @rt.slice_del(e)
-        v_10 = (e.limit - e.cursor)
+        v_10 = e.limit - e.cursor
         try {
           e.ket = e.cursor
           while true {
-            v_11 = (e.limit - e.cursor)
+            v_11 = e.limit - e.cursor
             try {
-              if !(r_mark_DUr(p)) {
+              if !r_mark_DUr(p) {
                 raise @rt.Lab3
               }
               break
@@ -1213,9 +1213,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
               @rt.Lab3 => ()
               err => raise err
             }
-            e.cursor = (e.limit - v_11)
+            e.cursor = e.limit - v_11
             try {
-              if !(r_mark_yDU(p)) {
+              if !r_mark_yDU(p) {
                 raise @rt.Lab3
               }
               break
@@ -1223,9 +1223,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
               @rt.Lab3 => ()
               err => raise err
             }
-            e.cursor = (e.limit - v_11)
+            e.cursor = e.limit - v_11
             try {
-              if !(r_mark_ysA(p)) {
+              if !r_mark_ysA(p) {
                 raise @rt.Lab3
               }
               break
@@ -1233,9 +1233,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
               @rt.Lab3 => ()
               err => raise err
             }
-            e.cursor = (e.limit - v_11)
-            if !(r_mark_ymUs_(p)) {
-              e.cursor = (e.limit - v_10)
+            e.cursor = e.limit - v_11
+            if !r_mark_ymUs_(p) {
+              e.cursor = e.limit - v_10
               raise @rt.Lab2
             }
             break
@@ -1250,18 +1250,18 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_7)
+      e.cursor = e.limit - v_7
       try {
-        if !(r_check_vowel_harmony(p)) {
+        if !r_check_vowel_harmony(p) {
           raise @rt.Lab1
         }
         if @rt.find_among_b(e, a_17) == 0 {
           raise @rt.Lab1
         }
         while true {
-          v_12 = (e.limit - e.cursor)
+          v_12 = e.limit - e.cursor
           try {
-            if !(r_mark_yDU(p)) {
+            if !r_mark_yDU(p) {
               raise @rt.Lab2
             }
             break
@@ -1269,8 +1269,8 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_12)
-          if !(r_mark_ysA(p)) {
+          e.cursor = e.limit - v_12
+          if !r_mark_ysA(p) {
             raise @rt.Lab1
           }
           break
@@ -1280,12 +1280,12 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_7)
+      e.cursor = e.limit - v_7
       try {
         while true {
-          v_13 = (e.limit - e.cursor)
+          v_13 = e.limit - e.cursor
           try {
-            if !(r_mark_sUnUz(p)) {
+            if !r_mark_sUnUz(p) {
               raise @rt.Lab2
             }
             break
@@ -1293,9 +1293,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_13)
+          e.cursor = e.limit - v_13
           try {
-            if !(r_mark_yUz(p)) {
+            if !r_mark_yUz(p) {
               raise @rt.Lab2
             }
             break
@@ -1303,9 +1303,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_13)
+          e.cursor = e.limit - v_13
           try {
-            if !(r_mark_sUn(p)) {
+            if !r_mark_sUn(p) {
               raise @rt.Lab2
             }
             break
@@ -1313,19 +1313,19 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_13)
-          if !(r_mark_yUm(p)) {
+          e.cursor = e.limit - v_13
+          if !r_mark_yUm(p) {
             raise @rt.Lab1
           }
           break
         }
         e.bra = e.cursor
         @rt.slice_del(e)
-        v_14 = (e.limit - e.cursor)
+        v_14 = e.limit - e.cursor
         try {
           e.ket = e.cursor
-          if !(r_mark_ymUs_(p)) {
-            e.cursor = (e.limit - v_14)
+          if !r_mark_ymUs_(p) {
+            e.cursor = e.limit - v_14
             raise @rt.Lab2
           }
         } catch {
@@ -1337,19 +1337,19 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_7)
-      if !(r_mark_DUr(p)) {
+      e.cursor = e.limit - v_7
+      if !r_mark_DUr(p) {
         raise @rt.Lab0
       }
       e.bra = e.cursor
       @rt.slice_del(e)
-      v_15 = (e.limit - e.cursor)
+      v_15 = e.limit - e.cursor
       try {
         e.ket = e.cursor
         while true {
-          v_16 = (e.limit - e.cursor)
+          v_16 = e.limit - e.cursor
           try {
-            if !(r_mark_sUnUz(p)) {
+            if !r_mark_sUnUz(p) {
               raise @rt.Lab2
             }
             break
@@ -1357,9 +1357,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_16)
+          e.cursor = e.limit - v_16
           try {
-            if !(r_mark_lAr(p)) {
+            if !r_mark_lAr(p) {
               raise @rt.Lab2
             }
             break
@@ -1367,9 +1367,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_16)
+          e.cursor = e.limit - v_16
           try {
-            if !(r_mark_yUm(p)) {
+            if !r_mark_yUm(p) {
               raise @rt.Lab2
             }
             break
@@ -1377,9 +1377,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_16)
+          e.cursor = e.limit - v_16
           try {
-            if !(r_mark_sUn(p)) {
+            if !r_mark_sUn(p) {
               raise @rt.Lab2
             }
             break
@@ -1387,9 +1387,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_16)
+          e.cursor = e.limit - v_16
           try {
-            if !(r_mark_yUz(p)) {
+            if !r_mark_yUz(p) {
               raise @rt.Lab2
             }
             break
@@ -1397,11 +1397,11 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_16)
+          e.cursor = e.limit - v_16
           break
         }
-        if !(r_mark_ymUs_(p)) {
-          e.cursor = (e.limit - v_15)
+        if !r_mark_ymUs_(p) {
+          e.cursor = e.limit - v_15
           raise @rt.Lab1
         }
       } catch {
@@ -1416,25 +1416,25 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
     @rt.Lab0 => ()
     err => raise err
   }
-  e.cursor = (e.limit - v_6)
-  if !(b_continue_stemming_noun_suffixes) {
+  e.cursor = e.limit - v_6
+  if !b_continue_stemming_noun_suffixes {
     return false
   }
-  v_17 = (e.limit - e.cursor)
+  v_17 = e.limit - e.cursor
   try {
     while true {
-      v_18 = (e.limit - e.cursor)
+      v_18 = e.limit - e.cursor
       try {
         e.ket = e.cursor
-        if !(r_mark_lAr(p)) {
+        if !r_mark_lAr(p) {
           raise @rt.Lab1
         }
         e.bra = e.cursor
         @rt.slice_del(e)
-        v_19 = (e.limit - e.cursor)
+        v_19 = e.limit - e.cursor
         try {
-          if !(r_stem_suffix_chain_before_ki(p)) {
-            e.cursor = (e.limit - v_19)
+          if !r_stem_suffix_chain_before_ki(p) {
+            e.cursor = e.limit - v_19
             raise @rt.Lab2
           }
         } catch {
@@ -1446,27 +1446,27 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_18)
+      e.cursor = e.limit - v_18
       try {
         e.ket = e.cursor
-        if !(r_check_vowel_harmony(p)) {
+        if !r_check_vowel_harmony(p) {
           raise @rt.Lab1
         }
         if @rt.find_among_b(e, a_11) == 0 {
           raise @rt.Lab1
         }
-        if !(r_mark_suffix_with_optional_n_consonant(p)) {
+        if !r_mark_suffix_with_optional_n_consonant(p) {
           raise @rt.Lab1
         }
         e.bra = e.cursor
         @rt.slice_del(e)
-        v_20 = (e.limit - e.cursor)
+        v_20 = e.limit - e.cursor
         try {
           while true {
-            v_21 = (e.limit - e.cursor)
+            v_21 = e.limit - e.cursor
             try {
               e.ket = e.cursor
-              if !(r_mark_lArI(p)) {
+              if !r_mark_lArI(p) {
                 raise @rt.Lab3
               }
               e.bra = e.cursor
@@ -1476,13 +1476,13 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
               @rt.Lab3 => ()
               err => raise err
             }
-            e.cursor = (e.limit - v_21)
+            e.cursor = e.limit - v_21
             try {
               e.ket = e.cursor
               while true {
-                v_22 = (e.limit - e.cursor)
+                v_22 = e.limit - e.cursor
                 try {
-                  if !(r_mark_possessives(p)) {
+                  if !r_mark_possessives(p) {
                     raise @rt.Lab4
                   }
                   break
@@ -1490,25 +1490,25 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
                   @rt.Lab4 => ()
                   err => raise err
                 }
-                e.cursor = (e.limit - v_22)
-                if !(r_mark_sU(p)) {
+                e.cursor = e.limit - v_22
+                if !r_mark_sU(p) {
                   raise @rt.Lab3
                 }
                 break
               }
               e.bra = e.cursor
               @rt.slice_del(e)
-              v_23 = (e.limit - e.cursor)
+              v_23 = e.limit - e.cursor
               try {
                 e.ket = e.cursor
-                if !(r_mark_lAr(p)) {
-                  e.cursor = (e.limit - v_23)
+                if !r_mark_lAr(p) {
+                  e.cursor = e.limit - v_23
                   raise @rt.Lab4
                 }
                 e.bra = e.cursor
                 @rt.slice_del(e)
-                if !(r_stem_suffix_chain_before_ki(p)) {
-                  e.cursor = (e.limit - v_23)
+                if !r_stem_suffix_chain_before_ki(p) {
+                  e.cursor = e.limit - v_23
                   raise @rt.Lab4
                 }
               } catch {
@@ -1520,16 +1520,16 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
               @rt.Lab3 => ()
               err => raise err
             }
-            e.cursor = (e.limit - v_21)
+            e.cursor = e.limit - v_21
             e.ket = e.cursor
-            if !(r_mark_lAr(p)) {
-              e.cursor = (e.limit - v_20)
+            if !r_mark_lAr(p) {
+              e.cursor = e.limit - v_20
               raise @rt.Lab2
             }
             e.bra = e.cursor
             @rt.slice_del(e)
-            if !(r_stem_suffix_chain_before_ki(p)) {
-              e.cursor = (e.limit - v_20)
+            if !r_stem_suffix_chain_before_ki(p) {
+              e.cursor = e.limit - v_20
               raise @rt.Lab2
             }
             break
@@ -1543,13 +1543,13 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_18)
+      e.cursor = e.limit - v_18
       try {
         e.ket = e.cursor
         while true {
-          v_24 = (e.limit - e.cursor)
+          v_24 = e.limit - e.cursor
           try {
-            if !(r_mark_ndA(p)) {
+            if !r_mark_ndA(p) {
               raise @rt.Lab2
             }
             break
@@ -1557,8 +1557,8 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_24)
-          if !(r_check_vowel_harmony(p)) {
+          e.cursor = e.limit - v_24
+          if !r_check_vowel_harmony(p) {
             raise @rt.Lab1
           }
           if @rt.find_among_b(e, a_5) == 0 {
@@ -1567,9 +1567,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
           break
         }
         while true {
-          v_25 = (e.limit - e.cursor)
+          v_25 = e.limit - e.cursor
           try {
-            if !(r_mark_lArI(p)) {
+            if !r_mark_lArI(p) {
               raise @rt.Lab2
             }
             e.bra = e.cursor
@@ -1579,24 +1579,24 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_25)
+          e.cursor = e.limit - v_25
           try {
-            if !(r_mark_sU(p)) {
+            if !r_mark_sU(p) {
               raise @rt.Lab2
             }
             e.bra = e.cursor
             @rt.slice_del(e)
-            v_26 = (e.limit - e.cursor)
+            v_26 = e.limit - e.cursor
             try {
               e.ket = e.cursor
-              if !(r_mark_lAr(p)) {
-                e.cursor = (e.limit - v_26)
+              if !r_mark_lAr(p) {
+                e.cursor = e.limit - v_26
                 raise @rt.Lab3
               }
               e.bra = e.cursor
               @rt.slice_del(e)
-              if !(r_stem_suffix_chain_before_ki(p)) {
-                e.cursor = (e.limit - v_26)
+              if !r_stem_suffix_chain_before_ki(p) {
+                e.cursor = e.limit - v_26
                 raise @rt.Lab3
               }
             } catch {
@@ -1608,8 +1608,8 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_25)
-          if !(r_stem_suffix_chain_before_ki(p)) {
+          e.cursor = e.limit - v_25
+          if !r_stem_suffix_chain_before_ki(p) {
             raise @rt.Lab1
           }
           break
@@ -1619,13 +1619,13 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_18)
+      e.cursor = e.limit - v_18
       try {
         e.ket = e.cursor
         while true {
-          v_27 = (e.limit - e.cursor)
+          v_27 = e.limit - e.cursor
           try {
-            if !(r_check_vowel_harmony(p)) {
+            if !r_check_vowel_harmony(p) {
               raise @rt.Lab2
             }
             if @rt.find_among_b(e, a_9) == 0 {
@@ -1636,8 +1636,8 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_27)
-          if !(r_check_vowel_harmony(p)) {
+          e.cursor = e.limit - v_27
+          if !r_check_vowel_harmony(p) {
             raise @rt.Lab1
           }
           if @rt.find_among_b(e, a_2) == 0 {
@@ -1646,24 +1646,24 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
           break
         }
         while true {
-          v_28 = (e.limit - e.cursor)
+          v_28 = e.limit - e.cursor
           try {
-            if !(r_mark_sU(p)) {
+            if !r_mark_sU(p) {
               raise @rt.Lab2
             }
             e.bra = e.cursor
             @rt.slice_del(e)
-            v_29 = (e.limit - e.cursor)
+            v_29 = e.limit - e.cursor
             try {
               e.ket = e.cursor
-              if !(r_mark_lAr(p)) {
-                e.cursor = (e.limit - v_29)
+              if !r_mark_lAr(p) {
+                e.cursor = e.limit - v_29
                 raise @rt.Lab3
               }
               e.bra = e.cursor
               @rt.slice_del(e)
-              if !(r_stem_suffix_chain_before_ki(p)) {
-                e.cursor = (e.limit - v_29)
+              if !r_stem_suffix_chain_before_ki(p) {
+                e.cursor = e.limit - v_29
                 raise @rt.Lab3
               }
             } catch {
@@ -1675,8 +1675,8 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_28)
-          if !(r_mark_lArI(p)) {
+          e.cursor = e.limit - v_28
+          if !r_mark_lArI(p) {
             raise @rt.Lab1
           }
           break
@@ -1686,10 +1686,10 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_18)
+      e.cursor = e.limit - v_18
       try {
         e.ket = e.cursor
-        if !(r_check_vowel_harmony(p)) {
+        if !r_check_vowel_harmony(p) {
           raise @rt.Lab1
         }
         if @rt.find_among_b(e, a_8) == 0 {
@@ -1697,28 +1697,28 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         }
         e.bra = e.cursor
         @rt.slice_del(e)
-        v_30 = (e.limit - e.cursor)
+        v_30 = e.limit - e.cursor
         try {
           e.ket = e.cursor
           while true {
-            v_31 = (e.limit - e.cursor)
+            v_31 = e.limit - e.cursor
             try {
-              if !(r_mark_possessives(p)) {
+              if !r_mark_possessives(p) {
                 raise @rt.Lab3
               }
               e.bra = e.cursor
               @rt.slice_del(e)
-              v_32 = (e.limit - e.cursor)
+              v_32 = e.limit - e.cursor
               try {
                 e.ket = e.cursor
-                if !(r_mark_lAr(p)) {
-                  e.cursor = (e.limit - v_32)
+                if !r_mark_lAr(p) {
+                  e.cursor = e.limit - v_32
                   raise @rt.Lab4
                 }
                 e.bra = e.cursor
                 @rt.slice_del(e)
-                if !(r_stem_suffix_chain_before_ki(p)) {
-                  e.cursor = (e.limit - v_32)
+                if !r_stem_suffix_chain_before_ki(p) {
+                  e.cursor = e.limit - v_32
                   raise @rt.Lab4
                 }
               } catch {
@@ -1730,17 +1730,17 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
               @rt.Lab3 => ()
               err => raise err
             }
-            e.cursor = (e.limit - v_31)
+            e.cursor = e.limit - v_31
             try {
-              if !(r_mark_lAr(p)) {
+              if !r_mark_lAr(p) {
                 raise @rt.Lab3
               }
               e.bra = e.cursor
               @rt.slice_del(e)
-              v_33 = (e.limit - e.cursor)
+              v_33 = e.limit - e.cursor
               try {
-                if !(r_stem_suffix_chain_before_ki(p)) {
-                  e.cursor = (e.limit - v_33)
+                if !r_stem_suffix_chain_before_ki(p) {
+                  e.cursor = e.limit - v_33
                   raise @rt.Lab4
                 }
               } catch {
@@ -1752,9 +1752,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
               @rt.Lab3 => ()
               err => raise err
             }
-            e.cursor = (e.limit - v_31)
-            if !(r_stem_suffix_chain_before_ki(p)) {
-              e.cursor = (e.limit - v_30)
+            e.cursor = e.limit - v_31
+            if !r_stem_suffix_chain_before_ki(p) {
+              e.cursor = e.limit - v_30
               raise @rt.Lab2
             }
             break
@@ -1768,13 +1768,13 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_18)
+      e.cursor = e.limit - v_18
       try {
         e.ket = e.cursor
         while true {
-          v_34 = (e.limit - e.cursor)
+          v_34 = e.limit - e.cursor
           try {
-            if !(r_mark_nUn(p)) {
+            if !r_mark_nUn(p) {
               raise @rt.Lab2
             }
             break
@@ -1782,32 +1782,32 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_34)
-          if !(r_check_vowel_harmony(p)) {
+          e.cursor = e.limit - v_34
+          if !r_check_vowel_harmony(p) {
             raise @rt.Lab1
           }
           if @rt.find_among_b(e, a_10) == 0 {
             raise @rt.Lab1
           }
-          if !(r_mark_suffix_with_optional_y_consonant(p)) {
+          if !r_mark_suffix_with_optional_y_consonant(p) {
             raise @rt.Lab1
           }
           break
         }
         e.bra = e.cursor
         @rt.slice_del(e)
-        v_35 = (e.limit - e.cursor)
+        v_35 = e.limit - e.cursor
         try {
           while true {
-            v_36 = (e.limit - e.cursor)
+            v_36 = e.limit - e.cursor
             try {
               e.ket = e.cursor
-              if !(r_mark_lAr(p)) {
+              if !r_mark_lAr(p) {
                 raise @rt.Lab3
               }
               e.bra = e.cursor
               @rt.slice_del(e)
-              if !(r_stem_suffix_chain_before_ki(p)) {
+              if !r_stem_suffix_chain_before_ki(p) {
                 raise @rt.Lab3
               }
               break
@@ -1815,13 +1815,13 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
               @rt.Lab3 => ()
               err => raise err
             }
-            e.cursor = (e.limit - v_36)
+            e.cursor = e.limit - v_36
             try {
               e.ket = e.cursor
               while true {
-                v_37 = (e.limit - e.cursor)
+                v_37 = e.limit - e.cursor
                 try {
-                  if !(r_mark_possessives(p)) {
+                  if !r_mark_possessives(p) {
                     raise @rt.Lab4
                   }
                   break
@@ -1829,25 +1829,25 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
                   @rt.Lab4 => ()
                   err => raise err
                 }
-                e.cursor = (e.limit - v_37)
-                if !(r_mark_sU(p)) {
+                e.cursor = e.limit - v_37
+                if !r_mark_sU(p) {
                   raise @rt.Lab3
                 }
                 break
               }
               e.bra = e.cursor
               @rt.slice_del(e)
-              v_38 = (e.limit - e.cursor)
+              v_38 = e.limit - e.cursor
               try {
                 e.ket = e.cursor
-                if !(r_mark_lAr(p)) {
-                  e.cursor = (e.limit - v_38)
+                if !r_mark_lAr(p) {
+                  e.cursor = e.limit - v_38
                   raise @rt.Lab4
                 }
                 e.bra = e.cursor
                 @rt.slice_del(e)
-                if !(r_stem_suffix_chain_before_ki(p)) {
-                  e.cursor = (e.limit - v_38)
+                if !r_stem_suffix_chain_before_ki(p) {
+                  e.cursor = e.limit - v_38
                   raise @rt.Lab4
                 }
               } catch {
@@ -1859,9 +1859,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
               @rt.Lab3 => ()
               err => raise err
             }
-            e.cursor = (e.limit - v_36)
-            if !(r_stem_suffix_chain_before_ki(p)) {
-              e.cursor = (e.limit - v_35)
+            e.cursor = e.limit - v_36
+            if !r_stem_suffix_chain_before_ki(p) {
+              e.cursor = e.limit - v_35
               raise @rt.Lab2
             }
             break
@@ -1875,10 +1875,10 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_18)
+      e.cursor = e.limit - v_18
       try {
         e.ket = e.cursor
-        if !(r_mark_lArI(p)) {
+        if !r_mark_lArI(p) {
           raise @rt.Lab1
         }
         e.bra = e.cursor
@@ -1888,9 +1888,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_18)
+      e.cursor = e.limit - v_18
       try {
-        if !(r_stem_suffix_chain_before_ki(p)) {
+        if !r_stem_suffix_chain_before_ki(p) {
           raise @rt.Lab1
         }
         break
@@ -1898,13 +1898,13 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_18)
+      e.cursor = e.limit - v_18
       try {
         e.ket = e.cursor
         while true {
-          v_39 = (e.limit - e.cursor)
+          v_39 = e.limit - e.cursor
           try {
-            if !(r_mark_DA(p)) {
+            if !r_mark_DA(p) {
               raise @rt.Lab2
             }
             break
@@ -1912,15 +1912,15 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_39)
+          e.cursor = e.limit - v_39
           try {
-            if !(r_check_vowel_harmony(p)) {
+            if !r_check_vowel_harmony(p) {
               raise @rt.Lab2
             }
-            if !(@rt.in_grouping_b(e, g_U)) {
+            if !@rt.in_grouping_b(e, g_U) {
               raise @rt.Lab2
             }
-            if !(r_mark_suffix_with_optional_y_consonant(p)) {
+            if !r_mark_suffix_with_optional_y_consonant(p) {
               raise @rt.Lab2
             }
             break
@@ -1928,36 +1928,36 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_39)
-          if !(r_check_vowel_harmony(p)) {
+          e.cursor = e.limit - v_39
+          if !r_check_vowel_harmony(p) {
             raise @rt.Lab1
           }
           if @rt.find_among_b(e, a_4) == 0 {
             raise @rt.Lab1
           }
-          if !(r_mark_suffix_with_optional_y_consonant(p)) {
+          if !r_mark_suffix_with_optional_y_consonant(p) {
             raise @rt.Lab1
           }
           break
         }
         e.bra = e.cursor
         @rt.slice_del(e)
-        v_40 = (e.limit - e.cursor)
+        v_40 = e.limit - e.cursor
         try {
           e.ket = e.cursor
           while true {
-            v_41 = (e.limit - e.cursor)
+            v_41 = e.limit - e.cursor
             try {
-              if !(r_mark_possessives(p)) {
+              if !r_mark_possessives(p) {
                 raise @rt.Lab3
               }
               e.bra = e.cursor
               @rt.slice_del(e)
-              v_42 = (e.limit - e.cursor)
+              v_42 = e.limit - e.cursor
               try {
                 e.ket = e.cursor
-                if !(r_mark_lAr(p)) {
-                  e.cursor = (e.limit - v_42)
+                if !r_mark_lAr(p) {
+                  e.cursor = e.limit - v_42
                   raise @rt.Lab4
                 }
               } catch {
@@ -1969,9 +1969,9 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
               @rt.Lab3 => ()
               err => raise err
             }
-            e.cursor = (e.limit - v_41)
-            if !(r_mark_lAr(p)) {
-              e.cursor = (e.limit - v_40)
+            e.cursor = e.limit - v_41
+            if !r_mark_lAr(p) {
+              e.cursor = e.limit - v_40
               raise @rt.Lab2
             }
             break
@@ -1979,8 +1979,8 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
           e.bra = e.cursor
           @rt.slice_del(e)
           e.ket = e.cursor
-          if !(r_stem_suffix_chain_before_ki(p)) {
-            e.cursor = (e.limit - v_40)
+          if !r_stem_suffix_chain_before_ki(p) {
+            e.cursor = e.limit - v_40
             raise @rt.Lab2
           }
         } catch {
@@ -1992,12 +1992,12 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_18)
+      e.cursor = e.limit - v_18
       e.ket = e.cursor
       while true {
-        v_43 = (e.limit - e.cursor)
+        v_43 = e.limit - e.cursor
         try {
-          if !(r_mark_possessives(p)) {
+          if !r_mark_possessives(p) {
             raise @rt.Lab1
           }
           break
@@ -2005,25 +2005,25 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
           @rt.Lab1 => ()
           err => raise err
         }
-        e.cursor = (e.limit - v_43)
-        if !(r_mark_sU(p)) {
+        e.cursor = e.limit - v_43
+        if !r_mark_sU(p) {
           raise @rt.Lab0
         }
         break
       }
       e.bra = e.cursor
       @rt.slice_del(e)
-      v_44 = (e.limit - e.cursor)
+      v_44 = e.limit - e.cursor
       try {
         e.ket = e.cursor
-        if !(r_mark_lAr(p)) {
-          e.cursor = (e.limit - v_44)
+        if !r_mark_lAr(p) {
+          e.cursor = e.limit - v_44
           raise @rt.Lab1
         }
         e.bra = e.cursor
         @rt.slice_del(e)
-        if !(r_stem_suffix_chain_before_ki(p)) {
-          e.cursor = (e.limit - v_44)
+        if !r_stem_suffix_chain_before_ki(p) {
+          e.cursor = e.limit - v_44
           raise @rt.Lab1
         }
       } catch {
@@ -2036,19 +2036,19 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
     @rt.Lab0 => ()
     err => raise err
   }
-  e.cursor = (e.limit - v_17)
+  e.cursor = e.limit - v_17
   e.cursor = e.limit_backward
   e.limit_backward = e.cursor
   e.cursor = e.limit
-  v_45 = (e.limit - e.cursor)
+  v_45 = e.limit - e.cursor
   try {
-    if !(@rt.eq_s_b(e, "ad")) {
+    if !@rt.eq_s_b(e, "ad") {
       raise @rt.Lab0
     }
-    v_46 = (e.limit - e.cursor)
+    v_46 = e.limit - e.cursor
     try {
-      if !(@rt.eq_s_b(e, "soy")) {
-        e.cursor = (e.limit - v_46)
+      if !@rt.eq_s_b(e, "soy") {
+        e.cursor = e.limit - v_46
         raise @rt.Lab1
       }
     } catch {
@@ -2063,14 +2063,14 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
     @rt.Lab0 => ()
     err => raise err
   }
-  e.cursor = (e.limit - v_45)
-  v_47 = (e.limit - e.cursor)
+  e.cursor = e.limit - v_45
+  v_47 = e.limit - e.cursor
   try {
     e.ket = e.cursor
     e.bra = e.cursor
     while true {
       try {
-        if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'd') {
+        if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'd' {
           raise @rt.Lab1
         }
         e.cursor -= 1
@@ -2079,21 +2079,21 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'g') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'g' {
         raise @rt.Lab0
       }
       e.cursor -= 1
       break
     }
-    if !(@rt.go_out_grouping_b(e, g_vowel)) {
+    if !@rt.go_out_grouping_b(e, g_vowel) {
       raise @rt.Lab0
     }
     while true {
-      v_48 = (e.limit - e.cursor)
+      v_48 = e.limit - e.cursor
       try {
         while true {
           try {
-            if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'a') {
+            if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'a' {
               raise @rt.Lab2
             }
             e.cursor -= 1
@@ -2102,7 +2102,7 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'ı') {
+          if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'ı' {
             raise @rt.Lab1
           }
           e.cursor -= 1
@@ -2114,11 +2114,11 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_48)
+      e.cursor = e.limit - v_48
       try {
         while true {
           try {
-            if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'e') {
+            if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'e' {
               raise @rt.Lab2
             }
             e.cursor -= 1
@@ -2127,7 +2127,7 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'i') {
+          if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'i' {
             raise @rt.Lab1
           }
           e.cursor -= 1
@@ -2139,11 +2139,11 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_48)
+      e.cursor = e.limit - v_48
       try {
         while true {
           try {
-            if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'o') {
+            if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'o' {
               raise @rt.Lab2
             }
             e.cursor -= 1
@@ -2152,7 +2152,7 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'u') {
+          if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'u' {
             raise @rt.Lab1
           }
           e.cursor -= 1
@@ -2164,10 +2164,10 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_48)
+      e.cursor = e.limit - v_48
       while true {
         try {
-          if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'ö') {
+          if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'ö' {
             raise @rt.Lab1
           }
           e.cursor -= 1
@@ -2176,7 +2176,7 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
           @rt.Lab1 => ()
           err => raise err
         }
-        if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'ü') {
+        if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'ü' {
           raise @rt.Lab0
         }
         e.cursor -= 1
@@ -2189,8 +2189,8 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
     @rt.Lab0 => ()
     err => raise err
   }
-  e.cursor = (e.limit - v_47)
-  v_49 = (e.limit - e.cursor)
+  e.cursor = e.limit - v_47
+  v_49 = e.limit - e.cursor
   try {
     e.ket = e.cursor
     among_var = @rt.find_among_b(e, a_23)
@@ -2198,13 +2198,12 @@ fn stem_inner(p : Turkish) -> Bool raise @rt.Lab {
       raise @rt.Lab0
     }
     e.bra = e.cursor
-    @rt.slice_from(e, as_23[(among_var - 1)])
+    @rt.slice_from(e, as_23[among_var - 1])
   } catch {
     @rt.Lab0 => ()
     err => raise err
   }
-  e.cursor = (e.limit - v_49)
+  e.cursor = e.limit - v_49
   e.cursor = e.limit_backward
   return true
 }
-

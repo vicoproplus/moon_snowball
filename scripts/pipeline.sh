@@ -56,6 +56,13 @@
 # file, its raw line count and the elapsed seconds, plus the residue and
 # raise-count assertions that follow the translations.
 #
+# The fmt stage keeps its own detail log in .planning/logs/u2/T5-fmt.log
+# (truncated at the start of every fmt run): the moon fmt command line, one
+# line per deliverable with its post-fmt line count and md5, and the
+# idempotence assertion (a second moon fmt changes no byte).  The two md5
+# baselines land in T5-md5-a.txt / T5-md5-b.txt and the two line-count
+# baselines in T5-lines-a.txt / T5-lines-b.txt.
+#
 # Exit codes:
 #     0  every selected stage succeeded
 #     2  usage error (unknown flag, unknown --stage/--only value) or a stage
@@ -68,6 +75,8 @@
 #     7  the translate stage failed (an input file is missing, the
 #        translator refused a construct, or a residue/raise-count
 #        assertion did not hold)
+#     8  the fmt stage failed (a deliverable is missing, moon fmt returned
+#        non-zero, or a second pass changed a byte)
 #     other  the exit code of the first failing stage.  The run is fail-fast:
 #        a later stage is never entered after a failure.
 #
@@ -109,6 +118,7 @@ EXIT_PATH=4
 EXIT_PROBE=5
 EXIT_GENERATE=6
 EXIT_TRANSLATE=7
+EXIT_FMT=8
 
 
 # The generate stage (Task 3) has its own log: the per-language command
@@ -128,6 +138,22 @@ TRANSLATE_LOG="$LOG_ROOT/T4-translate.log"
 # land inside the tree it is copying; SNOWBALL_T4_SNAPSHOT_ROOT relocates it.
 TRANSLATE_RAW_LOG="$LOG_ROOT/T4-translate-raw.log"
 TR_SNAPSHOT_ROOT="${SNOWBALL_T4_SNAPSHOT_ROOT:-$LOG_ROOT/snapshot}"
+
+# The fmt stage (Task 5) keeps its own detail log, truncated at the start of
+# every fmt run: the command line, one line per deliverable (file, post-fmt
+# line count, md5) and the idempotence assertion.  T5-md5-a/-b and
+# T5-lines-a/-b are the two baselines the brief's acceptance command compares;
+# the stage writes them itself so a run always leaves the same evidence.
+FMT_LOG="$LOG_ROOT/T5-fmt.log"
+FMT_MD5_A="$LOG_ROOT/T5-md5-a.txt"
+FMT_MD5_B="$LOG_ROOT/T5-md5-b.txt"
+FMT_LINES_A="$LOG_ROOT/T5-lines-a.txt"
+FMT_LINES_B="$LOG_ROOT/T5-lines-b.txt"
+
+# Where the fmt stage snapshots the deliverables before rewriting them.
+# Outside the module by default (under the gitignored log root);
+# SNOWBALL_T5_SNAPSHOT_ROOT relocates it, e.g. to F:/Temp.
+T5_SNAPSHOT_ROOT="${SNOWBALL_T5_SNAPSHOT_ROOT:-$LOG_ROOT/snapshot}"
 
 
 # The two parity directories and the snapshot area.  The snapshot area
@@ -149,6 +175,11 @@ PY32_LANGS="arabic dutch english french german italian portuguese russian spanis
 # same eleven the generate stage produces; porter311 is not a deliverable),
 # and the module name is read from moon.mod, never hard-coded.
 TR_LANGS="$GEN_LANGS"
+
+# The fmt stage's deliverables: the same eleven packages the translate stage
+# writes.  The formatter is named package by package, so the module root,
+# runtime/ and cmd/golden/ are never rewritten by this stage.
+FMT_LANGS="$GEN_LANGS"
 TR_MODULE_NAME=$(sed -n 's/^[[:space:]]*name[[:space:]]*=[[:space:]]*"\(.*\)".*/\1/p' "$MODULE_ROOT/moon.mod" | sed -n 1p)
 mkdir -p "$LOG_ROOT" 2>/dev/null || true
 # The run log is append-only: every run appends its own banner, probe result
@@ -949,8 +980,149 @@ stage_translate() {
 }
 
 stage_fmt() {
-    log_err "fmt is not implemented: Task 5 wires the moon fmt normalisation pass."
-    return 2
+    # ------------------------------------------------------------------
+    # Task 5 - the formatter segment (prototype defect P2).
+    #
+    # Input:  <module-root>/<lang>/<lang>_gen.mbt, the raw translator
+    #         output the translate stage wrote.
+    # Output: the same eleven files in their post-`moon fmt` form, which is
+    #         the form the repository commits (R9: the deliverable is the
+    #         raw output *after* normalisation, never a hand edit).
+    #
+    # `moon fmt` is invoked plainly, never with --check: on this machine
+    # --check shells out to `git --no-pager diff` and dies with
+    # `failed to execute git` (D-15).  The plain form is also what makes
+    # the rewrite happen at all; idempotence is proved separately by
+    # running the formatter a second time and comparing the md5 baselines.
+    #
+    # The formatter is run once over the eleven language packages by name,
+    # not over the whole module: `moon fmt` with no path also rewrites
+    # runtime/, cmd/golden/ and the root moon.pkg, and those are not this
+    # stage's deliverables.  Naming the packages keeps the stage's write
+    # set exactly the eleven *_gen.mbt files.
+    #
+    # The detail log describes the most recent run only.
+    # ------------------------------------------------------------------
+
+    # fmt_log <text> — one line to the fmt stage's own log.
+    fmt_log() {
+        printf '%s\n' "$*" >>"$FMT_LOG" 2>/dev/null || true
+    }
+
+    # fmt_emit <text> — one line to stdout and to the fmt log.
+    fmt_emit() {
+        printf '%s\n' "$*"
+        fmt_log "$*"
+    }
+
+    # fmt_fail <text> — one line to stderr, the run log and the fmt log.
+    fmt_fail() {
+        log_err "$*"
+        fmt_log "$*"
+    }
+
+    : > "$FMT_LOG" 2>/dev/null || true
+
+    _fmt_start=$(date +%s)
+
+    # -- 1. inputs -------------------------------------------------------
+    # Every deliverable must exist before the formatter is allowed to run;
+    # a missing one is a broken translate stage, not a fmt problem.
+    _fmt_files=0
+    for _fmt_lang in $FMT_LANGS; do
+        if [ ! -f "$MODULE_ROOT/$_fmt_lang/${_fmt_lang}_gen.mbt" ]; then
+            fmt_fail "fmt failed: missing deliverable: $MODULE_ROOT/$_fmt_lang/${_fmt_lang}_gen.mbt (translate stage did not write it)"
+            return "$EXIT_FMT"
+        fi
+        _fmt_files=$((_fmt_files + 1))
+    done
+    fmt_emit "input: $_fmt_files/11 *_gen.mbt present (raw translator output)"
+
+    # -- 2. snapshot (the destructive-op precondition) ------------------
+    # `moon fmt` rewrites every selected .mbt in place, so the raw form is
+    # copied out of the module first and the copy is confirmed before
+    # anything is written.
+    FMT_SNAPSHOT_DATE=$(date +%Y%m%d-%H%M%S)
+    FMT_SNAPSHOT_DIR="$T5_SNAPSHOT_ROOT/u2-t5-snapshot-$FMT_SNAPSHOT_DATE"
+    if ! mkdir -p "$FMT_SNAPSHOT_DIR" 2>/dev/null; then
+        fmt_fail "fmt failed: cannot create the snapshot directory $FMT_SNAPSHOT_DIR"
+        return "$EXIT_FMT"
+    fi
+    for _fmt_lang in $FMT_LANGS; do
+        if ! cp "$MODULE_ROOT/$_fmt_lang/${_fmt_lang}_gen.mbt" "$FMT_SNAPSHOT_DIR/" 2>/dev/null; then
+            fmt_fail "fmt failed: cannot snapshot $_fmt_lang/${_fmt_lang}_gen.mbt into $FMT_SNAPSHOT_DIR"
+            return "$EXIT_FMT"
+        fi
+        if [ ! -f "$FMT_SNAPSHOT_DIR/${_fmt_lang}_gen.mbt" ]; then
+            fmt_fail "fmt failed: the snapshot copy $FMT_SNAPSHOT_DIR/${_fmt_lang}_gen.mbt does not exist"
+            return "$EXIT_FMT"
+        fi
+    done
+    fmt_emit "snapshot: preserved the 11 *_gen.mbt (raw form) -> $FMT_SNAPSHOT_DIR"
+
+    # -- 3. the formatter ------------------------------------------------
+    # One invocation, in the module root, over the eleven packages.  The
+    # transcript goes to the fmt log, never through tee: the exit code
+    # tested is moon's own.
+    FMT_CMD="moon fmt $FMT_LANGS"
+    fmt_log "cmd=$FMT_CMD"
+    ( cd "$MODULE_ROOT" && moon fmt $FMT_LANGS ) >>"$FMT_LOG" 2>&1
+    _fmt_rc=$?
+    if [ "$_fmt_rc" -ne 0 ]; then
+        fmt_fail "fmt failed: $FMT_CMD failed (exit=$_fmt_rc)"
+        tail -n 20 "$FMT_LOG" 2>/dev/null >&2
+        return "$EXIT_FMT"
+    fi
+
+    # -- 4. baseline A: the post-fmt form --------------------------------
+    # md5 + line count per deliverable.  The line counts are the spec's
+    # F-U2-21 table (10,837 lines over the eleven files).
+    ( cd "$MODULE_ROOT" && md5sum */[a-z]*_gen.mbt ) >"$FMT_MD5_A" 2>/dev/null
+    if [ $? -ne 0 ]; then
+        fmt_fail "fmt failed: cannot write the md5 baseline $FMT_MD5_A"
+        return "$EXIT_FMT"
+    fi
+    ( cd "$MODULE_ROOT" && wc -l */[a-z]*_gen.mbt ) >"$FMT_LINES_A" 2>/dev/null
+    if [ $? -ne 0 ]; then
+        fmt_fail "fmt failed: cannot write the line-count baseline $FMT_LINES_A"
+        return "$EXIT_FMT"
+    fi
+    _fmt_total=0
+    for _fmt_lang in $FMT_LANGS; do
+        _fmt_n=$(wc -l <"$MODULE_ROOT/$_fmt_lang/${_fmt_lang}_gen.mbt" 2>/dev/null | tr -d ' ')
+        _fmt_md5=$(md5sum "$MODULE_ROOT/$_fmt_lang/${_fmt_lang}_gen.mbt" 2>/dev/null | cut -d' ' -f1)
+        _fmt_total=$((_fmt_total + ${_fmt_n:-0}))
+        fmt_emit "stage=fmt lang=$_fmt_lang file=$_fmt_lang/${_fmt_lang}_gen.mbt lines=$_fmt_n md5=$_fmt_md5"
+    done
+    fmt_emit "formatted $_fmt_files/11 lines=$_fmt_total (post-moon fmt form)"
+
+    # -- 5. idempotence: a second pass must not change a byte ------------
+    ( cd "$MODULE_ROOT" && moon fmt $FMT_LANGS ) >>"$FMT_LOG" 2>&1
+    _fmt_rc2=$?
+    if [ "$_fmt_rc2" -ne 0 ]; then
+        fmt_fail "fmt failed: the idempotence re-run of $FMT_CMD failed (exit=$_fmt_rc2)"
+        return "$EXIT_FMT"
+    fi
+    ( cd "$MODULE_ROOT" && md5sum */[a-z]*_gen.mbt ) >"$FMT_MD5_B" 2>/dev/null
+    if [ $? -ne 0 ]; then
+        fmt_fail "fmt failed: cannot write the md5 baseline $FMT_MD5_B"
+        return "$EXIT_FMT"
+    fi
+    ( cd "$MODULE_ROOT" && wc -l */[a-z]*_gen.mbt ) >"$FMT_LINES_B" 2>/dev/null
+    if ! cmp -s "$FMT_MD5_A" "$FMT_MD5_B"; then
+        fmt_fail "fmt failed: moon fmt is not idempotent (md5 baseline A != B); version: $(moon version 2>/dev/null | sed -n 1p)"
+        diff "$FMT_MD5_A" "$FMT_MD5_B" 2>/dev/null >&2
+        return "$EXIT_FMT"
+    fi
+    if ! cmp -s "$FMT_LINES_A" "$FMT_LINES_B"; then
+        fmt_fail "fmt failed: moon fmt is not idempotent (line-count baseline A != B)"
+        return "$EXIT_FMT"
+    fi
+    fmt_emit "idempotent: second moon fmt left md5 and line counts unchanged"
+
+    _fmt_now=$(date +%s)
+    fmt_emit "stage=fmt files=$_fmt_files elapsed=$((_fmt_now - _fmt_start))"
+    return 0
 }
 
 stage_check() {

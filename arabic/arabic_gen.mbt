@@ -8,7 +8,7 @@ pub struct Arabic {
 
 ///|
 pub fn Arabic::new() -> Arabic {
-  { e: @rt.Env::new("") }
+  { e: @rt.Env::new(""), }
 }
 
 ///|
@@ -167,7 +167,12 @@ let a_0 : Array[@rt.Among] = [
 ]
 
 ///|
-let as_0 : Array[String] = ["", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "ء", "أ", "إ", "ئ", "آ", "ؤ", "ا", "ب", "ة", "ت", "ث", "ج", "ح", "خ", "د", "ذ", "ر", "ز", "س", "ش", "ص", "ض", "ط", "ظ", "ع", "غ", "ف", "ق", "ك", "ل", "م", "ن", "ه", "و", "ى", "ي", "لا", "لأ", "لإ", "لآ"]
+let as_0 : Array[String] = [
+  "", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "ء", "أ", "إ", "ئ", "آ",
+  "ؤ", "ا", "ب", "ة", "ت", "ث", "ج", "ح", "خ", "د", "ذ", "ر", "ز", "س",
+  "ش", "ص", "ض", "ط", "ظ", "ع", "غ", "ف", "ق", "ك", "ل", "م", "ن", "ه",
+  "و", "ى", "ي", "لا", "لأ", "لإ", "لآ",
+]
 
 ///|
 let a_1 : Array[@rt.Among] = [
@@ -316,7 +321,7 @@ fn r_Suffix_Noun_Step2a(p : Arabic) -> Bool {
     return false
   }
   e.bra = e.cursor
-  if (e.current).length() < 5 {
+  if e.current.length() < 5 {
     return false
   }
   @rt.slice_del(e)
@@ -327,11 +332,11 @@ fn r_Suffix_Noun_Step2a(p : Arabic) -> Bool {
 fn r_Suffix_Noun_Step2b(p : Arabic) -> Bool {
   let e = p.e
   e.ket = e.cursor
-  if !(@rt.eq_s_b(e, "ات")) {
+  if !@rt.eq_s_b(e, "ات") {
     return false
   }
   e.bra = e.cursor
-  if (e.current).length() < 5 {
+  if e.current.length() < 5 {
     return false
   }
   @rt.slice_del(e)
@@ -342,12 +347,12 @@ fn r_Suffix_Noun_Step2b(p : Arabic) -> Bool {
 fn r_Suffix_Noun_Step2c1(p : Arabic) -> Bool {
   let e = p.e
   e.ket = e.cursor
-  if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'ت') {
+  if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'ت' {
     return false
   }
   e.cursor -= 1
   e.bra = e.cursor
-  if (e.current).length() < 4 {
+  if e.current.length() < 4 {
     return false
   }
   @rt.slice_del(e)
@@ -357,7 +362,7 @@ fn r_Suffix_Noun_Step2c1(p : Arabic) -> Bool {
 ///|
 fn r_Suffix_Verb_Step2a(p : Arabic) -> Bool {
   let e = p.e
-  let mut among_var : Int = 0
+  let mut among_var : Int32 = 0
   e.ket = e.cursor
   among_var = @rt.find_among_b(e, a_13)
   if among_var == 0 {
@@ -365,17 +370,17 @@ fn r_Suffix_Verb_Step2a(p : Arabic) -> Bool {
   }
   e.bra = e.cursor
   if among_var == 1 {
-    if (e.current).length() < 4 {
+    if e.current.length() < 4 {
       return false
     }
     @rt.slice_del(e)
   } else if among_var == 2 {
-    if (e.current).length() < 5 {
+    if e.current.length() < 5 {
       return false
     }
     @rt.slice_del(e)
   } else {
-    if (e.current).length() < 6 {
+    if e.current.length() < 6 {
       return false
     }
     @rt.slice_del(e)
@@ -389,30 +394,30 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
   let mut b_is_noun : Bool = false
   let mut b_is_verb : Bool = false
   let mut b_is_defined : Bool = false
-  let mut v_1 : Int = 0
-  let mut v_5 : Int = 0
-  let mut v_15 : Int = 0
-  let mut among_var : Int = 0
-  let mut v_2 : Int = 0
-  let mut v_16 : Int = 0
-  let mut v_17 : Int = 0
-  let mut v_20 : Int = 0
-  let mut v_21 : Int = 0
-  let mut v_6 : Int = 0
-  let mut v_18 : Int = 0
-  let mut v_19 : Int = 0
-  let mut v_3 : Int = 0
-  let mut v_11 : Int = 0
-  let mut v_22 : Int = 0
-  let mut v_7 : Int = 0
-  let mut v_4 : Int = 0
-  let mut v_8 : Int = 0
-  let mut v_12 : Int = 0
-  let mut v_23 : Int = 0
-  let mut v_9 : Int = 0
-  let mut v_10 : Int = 0
-  let mut v_13 : Int = 0
-  let mut v_14 : Int = 0
+  let mut v_1 : Int32 = 0
+  let mut v_5 : Int32 = 0
+  let mut v_15 : Int32 = 0
+  let mut among_var : Int32 = 0
+  let mut v_2 : Int32 = 0
+  let mut v_16 : Int32 = 0
+  let mut v_17 : Int32 = 0
+  let mut v_20 : Int32 = 0
+  let mut v_21 : Int32 = 0
+  let mut v_6 : Int32 = 0
+  let mut v_18 : Int32 = 0
+  let mut v_19 : Int32 = 0
+  let mut v_3 : Int32 = 0
+  let mut v_11 : Int32 = 0
+  let mut v_22 : Int32 = 0
+  let mut v_7 : Int32 = 0
+  let mut v_4 : Int32 = 0
+  let mut v_8 : Int32 = 0
+  let mut v_12 : Int32 = 0
+  let mut v_23 : Int32 = 0
+  let mut v_9 : Int32 = 0
+  let mut v_10 : Int32 = 0
+  let mut v_13 : Int32 = 0
+  let mut v_14 : Int32 = 0
   b_is_noun = true
   b_is_verb = true
   b_is_defined = false
@@ -425,14 +430,14 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
     }
     e.ket = e.cursor
     if among_var == 1 {
-      if (e.current).length() < 5 {
+      if e.current.length() < 5 {
         raise @rt.Lab0
       }
       b_is_noun = true
       b_is_verb = false
       b_is_defined = true
     } else {
-      if (e.current).length() < 4 {
+      if e.current.length() < 4 {
         raise @rt.Lab0
       }
       b_is_noun = true
@@ -459,7 +464,7 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
                 raise @rt.Lab3
               }
               e.ket = e.cursor
-              @rt.slice_from(e, as_0[(among_var - 1)])
+              @rt.slice_from(e, as_0[among_var - 1])
               break
             } catch {
               @rt.Lab3 => ()
@@ -491,20 +496,20 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
   }
   e.limit_backward = e.cursor
   e.cursor = e.limit
-  v_5 = (e.limit - e.cursor)
+  v_5 = e.limit - e.cursor
   try {
     while true {
-      v_6 = (e.limit - e.cursor)
+      v_6 = e.limit - e.cursor
       try {
-        if !(b_is_verb) {
+        if !b_is_verb {
           raise @rt.Lab1
         }
         while true {
-          v_7 = (e.limit - e.cursor)
+          v_7 = e.limit - e.cursor
           try {
             v_8 = 1
             while true {
-              v_9 = (e.limit - e.cursor)
+              v_9 = e.limit - e.cursor
               try {
                 e.ket = e.cursor
                 among_var = @rt.find_among_b(e, a_12)
@@ -513,17 +518,17 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
                 }
                 e.bra = e.cursor
                 if among_var == 1 {
-                  if (e.current).length() < 4 {
+                  if e.current.length() < 4 {
                     raise @rt.Lab3
                   }
                   @rt.slice_del(e)
                 } else if among_var == 2 {
-                  if (e.current).length() < 5 {
+                  if e.current.length() < 5 {
                     raise @rt.Lab3
                   }
                   @rt.slice_del(e)
                 } else {
-                  if (e.current).length() < 6 {
+                  if e.current.length() < 6 {
                     raise @rt.Lab3
                   }
                   @rt.slice_del(e)
@@ -534,16 +539,16 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
                 @rt.Lab3 => ()
                 err => raise err
               }
-              e.cursor = (e.limit - v_9)
+              e.cursor = e.limit - v_9
               break
             }
             if v_8 > 0 {
               raise @rt.Lab2
             }
             while true {
-              v_10 = (e.limit - e.cursor)
+              v_10 = e.limit - e.cursor
               try {
-                if !(r_Suffix_Verb_Step2a(p)) {
+                if !r_Suffix_Verb_Step2a(p) {
                   raise @rt.Lab3
                 }
                 break
@@ -551,7 +556,7 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
                 @rt.Lab3 => ()
                 err => raise err
               }
-              e.cursor = (e.limit - v_10)
+              e.cursor = e.limit - v_10
               try {
                 e.ket = e.cursor
                 among_var = @rt.find_among_b(e, a_15)
@@ -560,12 +565,12 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
                 }
                 e.bra = e.cursor
                 if among_var == 1 {
-                  if (e.current).length() < 4 {
+                  if e.current.length() < 4 {
                     raise @rt.Lab3
                   }
                   @rt.slice_del(e)
                 } else {
-                  if (e.current).length() < 6 {
+                  if e.current.length() < 6 {
                     raise @rt.Lab3
                   }
                   @rt.slice_del(e)
@@ -575,7 +580,7 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
                 @rt.Lab3 => ()
                 err => raise err
               }
-              e.cursor = (e.limit - v_10)
+              e.cursor = e.limit - v_10
               if e.cursor <= e.limit_backward {
                 raise @rt.Lab2
               }
@@ -587,14 +592,14 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_7)
+          e.cursor = e.limit - v_7
           try {
             e.ket = e.cursor
             if @rt.find_among_b(e, a_14) == 0 {
               raise @rt.Lab2
             }
             e.bra = e.cursor
-            if (e.current).length() < 5 {
+            if e.current.length() < 5 {
               raise @rt.Lab2
             }
             @rt.slice_del(e)
@@ -603,8 +608,8 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
             @rt.Lab2 => ()
             err => raise err
           }
-          e.cursor = (e.limit - v_7)
-          if !(r_Suffix_Verb_Step2a(p)) {
+          e.cursor = e.limit - v_7
+          if !r_Suffix_Verb_Step2a(p) {
             raise @rt.Lab1
           }
           break
@@ -614,23 +619,23 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_6)
+      e.cursor = e.limit - v_6
       try {
-        if !(b_is_noun) {
+        if !b_is_noun {
           raise @rt.Lab1
         }
-        v_11 = (e.limit - e.cursor)
+        v_11 = e.limit - e.cursor
         try {
           while true {
-            v_12 = (e.limit - e.cursor)
+            v_12 = e.limit - e.cursor
             try {
               e.ket = e.cursor
-              if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'ة') {
+              if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'ة' {
                 raise @rt.Lab3
               }
               e.cursor -= 1
               e.bra = e.cursor
-              if (e.current).length() < 4 {
+              if e.current.length() < 4 {
                 raise @rt.Lab3
               }
               @rt.slice_del(e)
@@ -639,7 +644,7 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
               @rt.Lab3 => ()
               err => raise err
             }
-            e.cursor = (e.limit - v_12)
+            e.cursor = e.limit - v_12
             try {
               if b_is_defined {
                 raise @rt.Lab3
@@ -651,25 +656,25 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
               }
               e.bra = e.cursor
               if among_var == 1 {
-                if (e.current).length() < 4 {
+                if e.current.length() < 4 {
                   raise @rt.Lab3
                 }
                 @rt.slice_del(e)
               } else if among_var == 2 {
-                if (e.current).length() < 5 {
+                if e.current.length() < 5 {
                   raise @rt.Lab3
                 }
                 @rt.slice_del(e)
               } else {
-                if (e.current).length() < 6 {
+                if e.current.length() < 6 {
                   raise @rt.Lab3
                 }
                 @rt.slice_del(e)
               }
               while true {
-                v_13 = (e.limit - e.cursor)
+                v_13 = e.limit - e.cursor
                 try {
-                  if !(r_Suffix_Noun_Step2a(p)) {
+                  if !r_Suffix_Noun_Step2a(p) {
                     raise @rt.Lab4
                   }
                   break
@@ -677,9 +682,9 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
                   @rt.Lab4 => ()
                   err => raise err
                 }
-                e.cursor = (e.limit - v_13)
+                e.cursor = e.limit - v_13
                 try {
-                  if !(r_Suffix_Noun_Step2b(p)) {
+                  if !r_Suffix_Noun_Step2b(p) {
                     raise @rt.Lab4
                   }
                   break
@@ -687,9 +692,9 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
                   @rt.Lab4 => ()
                   err => raise err
                 }
-                e.cursor = (e.limit - v_13)
+                e.cursor = e.limit - v_13
                 try {
-                  if !(r_Suffix_Noun_Step2c1(p)) {
+                  if !r_Suffix_Noun_Step2c1(p) {
                     raise @rt.Lab4
                   }
                   break
@@ -697,7 +702,7 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
                   @rt.Lab4 => ()
                   err => raise err
                 }
-                e.cursor = (e.limit - v_13)
+                e.cursor = e.limit - v_13
                 if e.cursor <= e.limit_backward {
                   raise @rt.Lab3
                 }
@@ -709,22 +714,22 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
               @rt.Lab3 => ()
               err => raise err
             }
-            e.cursor = (e.limit - v_12)
+            e.cursor = e.limit - v_12
             try {
               e.ket = e.cursor
-              if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'ن') {
+              if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'ن' {
                 raise @rt.Lab3
               }
               e.cursor -= 1
               e.bra = e.cursor
-              if (e.current).length() < 6 {
+              if e.current.length() < 6 {
                 raise @rt.Lab3
               }
               @rt.slice_del(e)
               while true {
-                v_14 = (e.limit - e.cursor)
+                v_14 = e.limit - e.cursor
                 try {
-                  if !(r_Suffix_Noun_Step2a(p)) {
+                  if !r_Suffix_Noun_Step2a(p) {
                     raise @rt.Lab4
                   }
                   break
@@ -732,9 +737,9 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
                   @rt.Lab4 => ()
                   err => raise err
                 }
-                e.cursor = (e.limit - v_14)
+                e.cursor = e.limit - v_14
                 try {
-                  if !(r_Suffix_Noun_Step2b(p)) {
+                  if !r_Suffix_Noun_Step2b(p) {
                     raise @rt.Lab4
                   }
                   break
@@ -742,8 +747,8 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
                   @rt.Lab4 => ()
                   err => raise err
                 }
-                e.cursor = (e.limit - v_14)
-                if !(r_Suffix_Noun_Step2c1(p)) {
+                e.cursor = e.limit - v_14
+                if !r_Suffix_Noun_Step2c1(p) {
                   raise @rt.Lab3
                 }
                 break
@@ -753,12 +758,12 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
               @rt.Lab3 => ()
               err => raise err
             }
-            e.cursor = (e.limit - v_12)
+            e.cursor = e.limit - v_12
             try {
               if b_is_defined {
                 raise @rt.Lab3
               }
-              if !(r_Suffix_Noun_Step2a(p)) {
+              if !r_Suffix_Noun_Step2a(p) {
                 raise @rt.Lab3
               }
               break
@@ -766,9 +771,9 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
               @rt.Lab3 => ()
               err => raise err
             }
-            e.cursor = (e.limit - v_12)
-            if !(r_Suffix_Noun_Step2b(p)) {
-              e.cursor = (e.limit - v_11)
+            e.cursor = e.limit - v_12
+            if !r_Suffix_Noun_Step2b(p) {
+              e.cursor = e.limit - v_11
               raise @rt.Lab2
             }
             break
@@ -778,12 +783,12 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
           err => raise err
         }
         e.ket = e.cursor
-        if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'ي') {
+        if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'ي' {
           raise @rt.Lab1
         }
         e.cursor -= 1
         e.bra = e.cursor
-        if (e.current).length() < 3 {
+        if e.current.length() < 3 {
           raise @rt.Lab1
         }
         @rt.slice_del(e)
@@ -792,9 +797,9 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
         @rt.Lab1 => ()
         err => raise err
       }
-      e.cursor = (e.limit - v_6)
+      e.cursor = e.limit - v_6
       e.ket = e.cursor
-      if (e.cursor <= e.limit_backward || e.current[(e.cursor - 1)] != 'ى') {
+      if e.cursor <= e.limit_backward || e.current[e.cursor - 1] != 'ى' {
         raise @rt.Lab0
       }
       e.cursor -= 1
@@ -806,7 +811,7 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
     @rt.Lab0 => ()
     err => raise err
   }
-  e.cursor = (e.limit - v_5)
+  e.cursor = e.limit - v_5
   e.cursor = e.limit_backward
   v_15 = e.cursor
   try {
@@ -820,25 +825,25 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
       }
       e.ket = e.cursor
       if among_var == 1 {
-        if (e.current).length() < 4 {
+        if e.current.length() < 4 {
           e.cursor = v_16
           raise @rt.Lab1
         }
         @rt.slice_from(e, "أ")
       } else if among_var == 2 {
-        if (e.current).length() < 4 {
+        if e.current.length() < 4 {
           e.cursor = v_16
           raise @rt.Lab1
         }
         @rt.slice_from(e, "آ")
       } else if among_var == 3 {
-        if (e.current).length() < 4 {
+        if e.current.length() < 4 {
           e.cursor = v_16
           raise @rt.Lab1
         }
         @rt.slice_from(e, "ا")
       } else {
-        if (e.current).length() < 4 {
+        if e.current.length() < 4 {
           e.cursor = v_16
           raise @rt.Lab1
         }
@@ -856,12 +861,12 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
         raise @rt.Lab1
       }
       e.ket = e.cursor
-      if (e.current).length() < 4 {
+      if e.current.length() < 4 {
         e.cursor = v_17
         raise @rt.Lab1
       }
       try {
-        if (e.cursor == e.limit || e.current[e.cursor] != 'ا') {
+        if e.cursor == e.limit || e.current[e.cursor] != 'ا' {
           raise @rt.Lab2
         }
         e.cursor += 1
@@ -886,12 +891,12 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
         }
         e.ket = e.cursor
         if among_var == 1 {
-          if (e.current).length() < 6 {
+          if e.current.length() < 6 {
             raise @rt.Lab1
           }
           @rt.slice_del(e)
         } else {
-          if (e.current).length() < 5 {
+          if e.current.length() < 5 {
             raise @rt.Lab1
           }
           @rt.slice_del(e)
@@ -903,7 +908,7 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
       }
       e.cursor = v_18
       try {
-        if !(b_is_noun) {
+        if !b_is_noun {
           raise @rt.Lab1
         }
         e.bra = e.cursor
@@ -913,17 +918,17 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
         }
         e.ket = e.cursor
         if among_var == 1 {
-          if (e.current).length() < 4 {
+          if e.current.length() < 4 {
             raise @rt.Lab1
           }
           @rt.slice_del(e)
         } else if among_var == 2 {
-          if (e.current).length() < 4 {
+          if e.current.length() < 4 {
             raise @rt.Lab1
           }
           @rt.slice_from(e, "ب")
         } else if among_var == 3 {
-          if (e.current).length() < 4 {
+          if e.current.length() < 4 {
             raise @rt.Lab1
           }
           @rt.slice_from(e, "ك")
@@ -934,7 +939,7 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
         err => raise err
       }
       e.cursor = v_18
-      if !(b_is_verb) {
+      if !b_is_verb {
         raise @rt.Lab0
       }
       v_19 = e.cursor
@@ -947,25 +952,25 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
         }
         e.ket = e.cursor
         if among_var == 1 {
-          if (e.current).length() < 5 {
+          if e.current.length() < 5 {
             e.cursor = v_19
             raise @rt.Lab1
           }
           @rt.slice_from(e, "ي")
         } else if among_var == 2 {
-          if (e.current).length() < 5 {
+          if e.current.length() < 5 {
             e.cursor = v_19
             raise @rt.Lab1
           }
           @rt.slice_from(e, "ت")
         } else if among_var == 3 {
-          if (e.current).length() < 5 {
+          if e.current.length() < 5 {
             e.cursor = v_19
             raise @rt.Lab1
           }
           @rt.slice_from(e, "ن")
         } else {
-          if (e.current).length() < 5 {
+          if e.current.length() < 5 {
             e.cursor = v_19
             raise @rt.Lab1
           }
@@ -980,7 +985,7 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
         raise @rt.Lab0
       }
       e.ket = e.cursor
-      if (e.current).length() < 5 {
+      if e.current.length() < 5 {
         raise @rt.Lab0
       }
       b_is_verb = true
@@ -1024,7 +1029,7 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
                 raise @rt.Lab3
               }
               e.ket = e.cursor
-              @rt.slice_from(e, as_2[(among_var - 1)])
+              @rt.slice_from(e, as_2[among_var - 1])
               break
             } catch {
               @rt.Lab3 => ()
@@ -1056,4 +1061,3 @@ fn stem_inner(p : Arabic) -> Bool raise @rt.Lab {
   }
   return true
 }
-
