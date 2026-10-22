@@ -36,6 +36,20 @@
 # porter has no vendored py32 counterpart: its baseline is gen1 == gen2
 # only, and that is what the pipeline states.
 #
+# FR-04 degrade (no WSL): when the host is not WSL and no working `wsl`
+# exists, the upstream compiler cannot run at all.  The generate stage then
+# takes its vendored branch: the ten tools/vendor/py32 stemmers are the
+# generation result (they are byte-identical to the compiler output), the
+# vendored porter311 input is verified exactly as [2b] does, and porter
+# (the 3.2.0 algorithm, which has no vendored counterpart) is reused from
+# out_root when a previous WSL run left it there.  With no cached porter the
+# branch refuses (exit 6) instead of shipping a partial set, and an
+# incomplete vendored directory is refused the same way (FE3).  The first
+# line of such a run is
+#     generate=skipped reason=no-wsl using=vendored
+# followed by the vendored directory's absolute path; the wslpath probe is
+# reported as skipped, and everything after generate is unchanged.
+#
 # [2b] vendored-in (Task 10): the twelfth registered input, porter311, is
 # never generated.  Its input is the vendored snowballstemmer-3.1.1
 # porter_stemmer.py, taken as-is, so the stage only checks that the file
@@ -625,6 +639,23 @@ if case "$(uname -s)" in *Linux*) true ;; *) false ;; esac && [ -n "${WSL_DISTRO
 fi
 
 # ---------------------------------------------------------------------------
+# FR-04 degrade detection (no WSL).
+#
+# From the host, the upstream Snowball compiler (a Linux ELF) can only run
+# inside WSL.  When `wsl` is absent from PATH, or `wsl -l -v` fails (no
+# distribution installed / the subsystem is unavailable), the generate stage
+# cannot run at all and switches to the vendored branch instead of failing.
+# Inside WSL the compiler is local, so the mode is never degraded there.
+# ---------------------------------------------------------------------------
+
+GENERATE_MODE=upstream
+if [ "$HOST" != wsl ]; then
+    if ! command -v wsl >/dev/null 2>&1 || ! wsl -l -v >/dev/null 2>&1 </dev/null; then
+        GENERATE_MODE=vendored
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 # Path resolution — flag > env (corpus root only) > module-relative default.
 # ---------------------------------------------------------------------------
 
@@ -715,6 +746,22 @@ case "$SB_SRC" in
 esac
 
 # ---------------------------------------------------------------------------
+# Degraded-run banner (FR-04).  On the no-WSL path the generate stage cannot
+# run at all, so the run says so on its very FIRST line - before the startup
+# banner - and names the vendored directory it reads instead.  The line is
+# emitted only when the generate stage is part of this run's selection.
+# ---------------------------------------------------------------------------
+if [ "$GENERATE_MODE" = vendored ]; then
+    for _dn_stage in $RUN_STAGES; do
+        if [ "$_dn_stage" = generate ]; then
+            log_line "generate=skipped reason=no-wsl using=vendored"
+            log_line "vendored_dir=$VENDOR_ROOT_ABS"
+            break
+        fi
+    done
+fi
+
+# ---------------------------------------------------------------------------
 # Toolchain preflight — before stage=unpack.  A missing tool is the very
 # first line of the run.
 # ---------------------------------------------------------------------------
@@ -732,7 +779,38 @@ if command -v python >/dev/null 2>&1; then
 elif command -v python3 >/dev/null 2>&1; then
     PYTHON_BIN=python3
 else
-    MISSING="$MISSING python"
+    # Narrow fallback: on a Windows host python is often registered with the
+    # `py` launcher without being on PATH.  The fallback is used only when
+    # neither `python` nor `python3` resolves, never preferred over them, and
+    # a launcher that names no runnable interpreter still ends in the exit-3
+    # preflight.  The concrete interpreter is resolved (never the launcher
+    # itself, which needs an extra -V argument) and converted to the POSIX
+    # form the shell can execute.  The launcher path comes from the
+    # environment, never from a hard-coded drive letter (FR-22).
+    _pf_launcher=""
+    for _pf_cand in "${SYSTEMROOT:-}/py.exe" "${WINDIR:-}/py.exe"; do
+        case "$_pf_cand" in
+            /py.exe) continue ;;
+        esac
+        if [ -f "$_pf_cand" ] && [ -x "$_pf_cand" ]; then
+            _pf_launcher="$_pf_cand"
+            break
+        fi
+    done
+    if [ -n "$_pf_launcher" ] && command -v cygpath >/dev/null 2>&1; then
+        _pf_py_win=$("$_pf_launcher" -0p 2>/dev/null | sed -n 's/.*[[:space:]]\([A-Za-z]:[\\/][^[:space:]]*[Pp]ython[0-9.]*\.exe\)[[:space:]]*$/\1/p')
+        for _pf_py in $_pf_py_win; do
+            _pf_py_u=$(cygpath -u "$_pf_py" 2>/dev/null) || continue
+            [ -x "$_pf_py_u" ] || continue
+            if "$_pf_py_u" -c "" >/dev/null 2>&1; then
+                PYTHON_BIN="$_pf_py_u"
+                break
+            fi
+        done
+    fi
+    if [ -z "$PYTHON_BIN" ]; then
+        MISSING="$MISSING python"
+    fi
 fi
 command -v moon >/dev/null 2>&1 || MISSING="$MISSING moon"
 command -v gzip >/dev/null 2>&1 || MISSING="$MISSING gzip"
@@ -848,7 +926,15 @@ probe_via_wsl() {
 }
 
 PROBE_T0=$(date +%s)
-if [ "$HOST" = wsl ]; then
+if [ "$GENERATE_MODE" = vendored ]; then
+    # FR-04: there is no WSL to probe.  The round-trip assertion exists to
+    # protect the host -> WSL path conversion; on the vendored path no path
+    # ever crosses that boundary, so the probe is reported as skipped and the
+    # run continues.  It is never silently green: the field says why.
+    probe_note "host=$HOST"
+    probe_note "probe_result=SKIPPED_NO_WSL"
+    PROBE_RC=0
+elif [ "$HOST" = wsl ]; then
     probe_local
     PROBE_RC=$?
 else
@@ -866,7 +952,11 @@ if [ "$PROBE_RC" -ne 0 ]; then
     exit "$EXIT_PROBE"
 fi
 
-emit_field wslpath_probe "RT_OK"
+if [ "$GENERATE_MODE" = vendored ]; then
+    emit_field wslpath_probe "skipped reason=no-wsl"
+else
+    emit_field wslpath_probe "RT_OK"
+fi
 
 # ---------------------------------------------------------------------------
 # The six stages.  Until their own tasks land the bodies are honest-red:
@@ -1199,6 +1289,98 @@ stage_generate() {
     done
     if [ "$_gen_preserved" -eq 0 ]; then
         log_line "snapshot: nothing to preserve"
+    fi
+
+    # -- 2. FR-04 vendored branch (no WSL) ------------------------------
+    # Without WSL the upstream compiler cannot run at all, so the generation
+    # is skipped and the vendored inputs take its place.  The ten vendored
+    # py32 stemmers ARE the compiler's output (that is the equivalence T3
+    # proved), so they are copied into out_root - the translator's only
+    # input directory - and the three main-path parity claims are replaced
+    # by the claims that can actually be checked here:
+    #
+    #     vendored py32 10/10 present      a missing file is fatal (FE3)
+    #     equivalent py32 10/10 SAME       bytes vs the gen1 baseline, when
+    #                                      a real generation left one; a
+    #                                      difference means the vendored
+    #                                      copy is stale (AD1-8) and is fatal
+    #     porter=cached | missing          porter has no vendored
+    #                                      counterpart, so a previous WSL
+    #                                      generation in out_root is the only
+    #                                      honest source; absent -> refuse
+    #
+    # Nothing is fabricated: an incomplete vendored set and a missing porter
+    # both exit 6, and the conservative choice is refusal (FE3), never an
+    # empty run.
+    if [ "$GENERATE_MODE" = vendored ]; then
+        _vg_dir="$VENDOR_ROOT_ABS/py32"
+        gen_emit "stage=generate branch=vendored reason=no-wsl"
+        gen_emit "vendored_dir=$_vg_dir"
+        if [ ! -d "$_vg_dir" ]; then
+            gen_fail "generate failed: vendored input directory missing: $_vg_dir (FE3: the vendored set is incomplete; restore it by the U1-a copy contract and re-run)"
+            return "$EXIT_GENERATE"
+        fi
+        _vg_present=0
+        _vg_missing=""
+        for _gen_lang in $PY32_LANGS; do
+            if [ -f "$_vg_dir/${_gen_lang}_stemmer.py" ]; then
+                _vg_present=$((_vg_present + 1))
+            else
+                _vg_missing="$_vg_missing $_vg_dir/${_gen_lang}_stemmer.py"
+            fi
+        done
+        if [ "$_vg_present" -ne 10 ]; then
+            for _vg_f in $_vg_missing; do
+                gen_fail "generate failed: vendored input missing: $_vg_f"
+            done
+            gen_fail "generate failed: vendored py32 coverage $_vg_present/10 (FE3: an incomplete vendored set is refused, never run empty)"
+            return "$EXIT_GENERATE"
+        fi
+        gen_emit "vendored py32 $_vg_present/10 present"
+
+        _vg_porter="$OUT_ROOT_ABS/porter_stemmer.py"
+        if [ -f "$_vg_porter" ]; then
+            _vg_porter_md5=$(md5sum "$_vg_porter" 2>/dev/null | cut -d' ' -f1)
+            gen_emit "porter=cached file=$_vg_porter md5=$_vg_porter_md5"
+        else
+            gen_fail "generate failed: porter=cached missing: $_vg_porter (porter has no vendored counterpart and no earlier WSL generation is cached there; run the pipeline once with WSL available, or restore the file)"
+            return "$EXIT_GENERATE"
+        fi
+
+        if [ -f "$GEN1_ROOT/english_stemmer.py" ]; then
+            _vg_same=0
+            for _gen_lang in $PY32_LANGS; do
+                if cmp -s "$GEN1_ROOT/${_gen_lang}_stemmer.py" "$_vg_dir/${_gen_lang}_stemmer.py"; then
+                    _vg_same=$((_vg_same + 1))
+                else
+                    gen_fail "generate failed: $_gen_lang differs (the gen1 baseline of a real generation vs the vendored py32 stemmer: the vendored copy is stale)"
+                    gen_fail "generate failed: differing files: $GEN1_ROOT/${_gen_lang}_stemmer.py $_vg_dir/${_gen_lang}_stemmer.py"
+                    return "$EXIT_GENERATE"
+                fi
+            done
+            gen_emit "equivalent py32 $_vg_same/10 SAME (gen1 baseline vs vendored)"
+        else
+            gen_emit "equivalent py32 na/10 (no gen1 baseline in $GEN1_ROOT; nothing to compare against)"
+        fi
+
+        for _gen_lang in $PY32_LANGS; do
+            if ! cp "$_vg_dir/${_gen_lang}_stemmer.py" "$OUT_ROOT_ABS/${_gen_lang}_stemmer.py" 2>/dev/null; then
+                gen_fail "generate failed: cannot copy the vendored input $_vg_dir/${_gen_lang}_stemmer.py into $OUT_ROOT_ABS"
+                return "$EXIT_GENERATE"
+            fi
+        done
+        _vg_out=0
+        for _gen_lang in $GEN_LANGS; do
+            if [ -f "$OUT_ROOT_ABS/${_gen_lang}_stemmer.py" ]; then
+                _vg_out=$((_vg_out + 1))
+            fi
+        done
+        if [ "$_vg_out" -ne 11 ]; then
+            gen_fail "generate failed: out_root $_vg_out/11 inputs after the vendored materialisation (10 vendored + porter cached expected)"
+            return "$EXIT_GENERATE"
+        fi
+        gen_emit "out_root $_vg_out/11 inputs (10 vendored py32 + porter cached)"
+        return 0
     fi
 
     # -- 2. path conversion --------------------------------------------
@@ -1955,6 +2137,19 @@ stage_golden() {
         log_err "stage=golden exit=$EXIT_GOLDEN"
         return "$EXIT_GOLDEN"
     fi
+
+    # The twelve `lang=<n> checked=<N> mismatch=<M>` rows are copied into the
+    # run log verbatim, one per line, so the acceptance transcript proves the
+    # 12-row claim without having to open T7-golden.log.  The rows come from
+    # the driver's own log and the verdict above is the gate's: the two are
+    # not a second assertion, only a copy of what the gate already accepted.
+
+    while IFS= read -r _g_row; do
+        case "$_g_row" in
+            lang=*) log_line "$_g_row" ;;
+            *) : ;;
+        esac
+    done <"$GOLDEN_LOG"
 
     _g_rows=$(grep -cE '^lang=[^ ]+ checked=[0-9]+ mismatch=0 ' "$GOLDEN_LOG" 2>/dev/null)
     _g_now=$(date +%s)
