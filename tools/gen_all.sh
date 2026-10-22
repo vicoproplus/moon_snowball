@@ -83,8 +83,10 @@ fi
 mkdir -p "$OUT"
 
 # A dropped language or a short run must not leave old bytes behind: the
-# caller compares this directory against a fresh copy, so only the files
-# this script owns are removed first (nothing else in $OUT is touched).
+# caller compares this directory against a fresh copy.  The clear is name-
+# based, so it removes every *_stemmer.py and __init__.py in $OUT — including
+# a hand-written sibling such as mine_stemmer.py; nothing else in $OUT is
+# touched, and the eleven generated names are rewritten by the loop below.
 rm -f "$OUT"/*_stemmer.py "$OUT/__init__.py"
 
 LANGS="arabic dutch english french german italian porter portuguese russian spanish turkish"

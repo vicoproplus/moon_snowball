@@ -378,12 +378,22 @@ esac
 #     directory, so a diagnostic never prints a bare relative path;
 #   * the longest existing prefix is canonicalised with pwd -P.
 #
+# A leading "~" is NOT expanded: POSIX sh performs tilde expansion on words
+# only, never on the contents of a variable, so "~/x" is the literal name
+# "~/x" here and is resolved as a relative path.
+#
 # Failure (unconvertible drive path, no POSIX invocation directory) prints one
 # diagnostic to stderr naming <label> and returns 1 with nothing on stdout.
 abs_of() {
     _p="$1"
     _label="${2:-path}"
+    # A drive root (X:, X:/, X:\) is recognised BEFORE the trailing separator
+    # is stripped: stripping turns "F:/" into "F:", which then falls through
+    # to the relative branch and resolves to "<cwd>/./F:".  Normalising it to
+    # "X:/" keeps the drive test below matching, and cygpath -u then yields
+    # the drive root "/x/".
     case "$_p" in
+        [A-Za-z]:|[A-Za-z]:\\|[A-Za-z]:/) _p="${_p%:*}:/" ;;
         */) _p="${_p%/}" ;;
     esac
     [ -n "$_p" ] || _p="/"
@@ -529,6 +539,14 @@ done
 # a shell-variable typo, and silently running everything hides it.
 if [ "$ONLY_SET" -eq 1 ] && [ -z "$ONLY_ARG" ]; then
     log_err "--only needs a stage name (expected one of: $STAGES)"
+    exit "$EXIT_USAGE"
+fi
+
+# --stage and --only are mutually exclusive: --stage means "everything up to
+# <s>", --only means "exactly <s>".  Accepting both would have to pick one
+# silently, so it is a usage error.
+if [ -n "$STAGE_ARG" ] && [ "$ONLY_SET" -eq 1 ]; then
+    log_err "--stage and --only are mutually exclusive"
     exit "$EXIT_USAGE"
 fi
 
@@ -989,6 +1007,11 @@ stage_unpack() {
             up_fail "unpack failed: cannot resolve the snapshot directory (SNOWBALL_SNAPSHOT_ROOT=$SNAPSHOT_BASE)"
             return "$EXIT_UNPACK"
         }
+        # The base the helper actually resolved.  The prune below must use this
+        # value, never the raw $SNAPSHOT_BASE: a relative or drive-form
+        # SNOWBALL_SNAPSHOT_ROOT resolves to a different absolute path, and
+        # pruning the unresolved one removes nothing (or the wrong tree).
+        SNAPSHOT_RESOLVED=$(dirname "$_up_snap")
         mkdir -p "$_up_snap" 2>/dev/null || true
         if ! cp -r "$UNPACK_DST" "$_up_snap" 2>/dev/null || [ ! -d "$_up_snap" ]; then
             up_fail "unpack failed: cannot snapshot $UNPACK_DST into $_up_snap"
@@ -997,17 +1020,37 @@ stage_unpack() {
         log_line "snapshot: preserved $UNPACK_DST -> $_up_snap"
         up_emit "snapshot=$_up_snap"
         # Keep the two most recent u2-t8-* snapshots, drop the older ones.
-        # The list is newest-first, the snapshot just made is always first,
-        # and only existing directories are removed.
-        _up_kept=0
-        for _up_old in $(ls -d "$SNAPSHOT_BASE"/u2-t8-* 2>/dev/null | sort -r); do
+        # The prune works on the RESOLVED snapshot root and on shell globs
+        # only: a `$(ls ...)` list would word-split on the spaces a root such
+        # as "F:/Temp/pr/a b" contains and `rm -rf` would then remove an
+        # unrelated directory while the real snapshots survived.  A glob is
+        # never word-split; when nothing matches it expands to the literal
+        # pattern, which the `[ -d ]` guard rejects.
+        _up_keep1=""
+        _up_keep2=""
+        for _up_old in "$SNAPSHOT_RESOLVED"/u2-t8-*; do
             [ -d "$_up_old" ] || continue
-            _up_kept=$((_up_kept + 1))
-            if [ "$_up_kept" -gt 2 ]; then
-                rm -rf "$_up_old" 2>/dev/null || true
+            if [ -z "$_up_keep1" ] || [ "$_up_old" -nt "$_up_keep1" ]; then
+                _up_keep2="$_up_keep1"
+                _up_keep1="$_up_old"
+            elif [ -z "$_up_keep2" ] || [ "$_up_old" -nt "$_up_keep2" ]; then
+                _up_keep2="$_up_old"
             fi
         done
-        up_emit "snapshot_prune=keep-2 newest=$_up_snap root=$SNAPSHOT_BASE"
+        _up_removed=0
+        for _up_old in "$SNAPSHOT_RESOLVED"/u2-t8-*; do
+            [ -d "$_up_old" ] || continue
+            [ "$_up_old" = "$_up_keep1" ] && continue
+            [ "$_up_old" = "$_up_keep2" ] && continue
+            rm -rf -- "$_up_old" 2>/dev/null || true
+            _up_removed=$((_up_removed + 1))
+        done
+        _up_kept=0
+        for _up_old in "$SNAPSHOT_RESOLVED"/u2-t8-*; do
+            [ -d "$_up_old" ] || continue
+            _up_kept=$((_up_kept + 1))
+        done
+        up_emit "snapshot_prune=keep-2 kept=$_up_kept removed=$_up_removed root=$SNAPSHOT_RESOLVED"
     else
         log_line "snapshot: nothing to preserve ($UNPACK_DST does not exist)"
         up_emit "snapshot=none ($UNPACK_DST absent)"
