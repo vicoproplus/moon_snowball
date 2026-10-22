@@ -63,6 +63,15 @@
 # baselines land in T5-md5-a.txt / T5-md5-b.txt and the two line-count
 # baselines in T5-lines-a.txt / T5-lines-b.txt.
 #
+# The unpack stage (Task 8) resolves the corpus root, reuses it when the
+# eleven delivery inputs are already complete (`corpus=reused`, nothing is
+# cloned), and otherwise fetches it with a partial clone + sparse-checkout.
+# It then snapshots build/data/arabic and hands the decompression to
+# tools/unpack_arabic.sh, which verifies an existing artifact by line count
+# AND content hash rather than trusting non-emptiness.  Its evidence is in
+# .planning/logs/u2/T8-unpack.log (append-only, written by the script) and
+# .planning/logs/u2/T8-corpus.log (acquisition decision, per run).
+#
 # Exit codes:
 #     0  every selected stage succeeded
 #     2  usage error (unknown flag, unknown --stage/--only value) or a stage
@@ -77,6 +86,9 @@
 #        assertion did not hold)
 #     8  the fmt stage failed (a deliverable is missing, moon fmt returned
 #        non-zero, or a second pass changed a byte)
+#     9  the unpack stage failed (the corpus is incomplete after the fetch,
+#        git is missing, the clone failed, or the arabic artifact did not
+#        verify)
 #     other  the exit code of the first failing stage.  The run is fail-fast:
 #        a later stage is never entered after a failure.
 #
@@ -119,6 +131,7 @@ EXIT_PROBE=5
 EXIT_GENERATE=6
 EXIT_TRANSLATE=7
 EXIT_FMT=8
+EXIT_UNPACK=9
 
 
 # The generate stage (Task 3) has its own log: the per-language command
@@ -154,6 +167,23 @@ FMT_LINES_B="$LOG_ROOT/T5-lines-b.txt"
 # Outside the module by default (under the gitignored log root);
 # SNOWBALL_T5_SNAPSHOT_ROOT relocates it, e.g. to F:/Temp.
 T5_SNAPSHOT_ROOT="${SNOWBALL_T5_SNAPSHOT_ROOT:-$LOG_ROOT/snapshot}"
+
+# The unpack stage (Task 8) materialises the arabic golden corpus.  Its detail
+# log is appended to by tools/unpack_arabic.sh, so one file holds the evidence
+# of every run; the corpus log records the acquisition decision (reused root
+# vs. clone).  The decompressed cache lives under build/ (gitignored) and the
+# corpus root is the pipeline's resolved data_root, never a hard-coded path.
+UNPACK_LOG="$LOG_ROOT/T8-unpack.log"
+CORPUS_LOG="$LOG_ROOT/T8-corpus.log"
+UNPACK_SCRIPT="$MODULE_ROOT/tools/unpack_arabic.sh"
+UNPACK_DST="$MODULE_ROOT/build/data/arabic"
+
+# The eleven delivery inputs (brief Step 0c).  dutch_porter is optional: it is
+# not a delivered stemmer (design NG-08), so its absence is recorded, never
+# fatal.  arabic is the only language allowed to ship gzipped.
+CORPUS_LANGS="english porter french german spanish italian portuguese dutch russian arabic turkish"
+CORPUS_OPTIONAL="dutch_porter"
+CORPUS_URL="${SNOWBALL_CORPUS_URL:-https://github.com/snowballstem/snowball-data}"
 
 
 # The two parity directories and the snapshot area.  The snapshot area
@@ -638,8 +668,175 @@ emit_field wslpath_probe "RT_OK"
 # ---------------------------------------------------------------------------
 
 stage_unpack() {
-    log_err "unpack is not implemented: tools/unpack_arabic.sh still carries the prototype's stale path arithmetic (it resolves data/arabic against the wrong root), so running it now would write the decompressed corpus to the wrong place. Task 8 rewrites that script; until then this stage refuses to run."
-    return 2
+    # ------------------------------------------------------------------
+    # Task 8 - the arabic unpack segment (corpus acquisition + verification).
+    #
+    # Step 0a: resolve the corpus root (DATA_ROOT_ABS, already resolved as
+    #          flag > SNOWBALL_DATA_ROOT > module-relative default) and check
+    #          the eleven delivery inputs BEFORE anything is fetched.  A
+    #          complete corpus is used as-is: `corpus=reused`, nothing is
+    #          cloned, whatever the source of the root.
+    # Step 0b: only when an input is missing, fetch with the two-stage form
+    #          (partial clone + sparse-checkout) that is the only shape that
+    #          worked on this network; git < 2.19 (no --filter=blob:none)
+    #          degrades to a plain --depth 1 clone.
+    # Step 0c: assert the eleven inputs again (hard: any missing is fatal) and
+    #          record dutch_porter, which is optional and never fatal.
+    # Step 0d: a failed fetch exits non-zero with `corpus-clone-failed` on
+    #          stderr and names SNOWBALL_DATA_ROOT as the escape hatch.  It
+    #          never pretends to pass.
+    #
+    # Then: snapshot build/data/arabic (the destructive-op precondition) and
+    # hand the decompression to tools/unpack_arabic.sh, which verifies an
+    # existing artifact by line count AND content hash instead of trusting
+    # non-emptiness (prototype defect P5).
+    # ------------------------------------------------------------------
+
+    # up_log <text> — one line to the corpus-acquisition log.
+    up_log() {
+        printf '%s\n' "$*" >>"$CORPUS_LOG" 2>/dev/null || true
+    }
+
+    # up_emit <text> — one line to stdout and to the corpus log.
+    up_emit() {
+        printf '%s\n' "$*"
+        up_log "$*"
+    }
+
+    # up_fail <text> — one line to stderr, the run log and the corpus log.
+    up_fail() {
+        log_err "$*"
+        up_log "$*"
+    }
+
+    # corpus_complete — every delivery input has a voc and an output side,
+    # plain or gzipped (arabic is the only language shipped gzipped).
+    corpus_complete() {
+        for _cc_lang in $CORPUS_LANGS; do
+            if [ ! -f "$DATA_ROOT_ABS/$_cc_lang/voc.txt" ] && [ ! -f "$DATA_ROOT_ABS/$_cc_lang/voc.txt.gz" ]; then
+                return 1
+            fi
+            if [ ! -f "$DATA_ROOT_ABS/$_cc_lang/output.txt" ] && [ ! -f "$DATA_ROOT_ABS/$_cc_lang/output.txt.gz" ]; then
+                return 1
+            fi
+        done
+        return 0
+    }
+
+    # The corpus log describes the most recent run only (the unpack log is
+    # append-only: tools/unpack_arabic.sh owns it).
+    : > "$CORPUS_LOG" 2>/dev/null || true
+    up_emit "corpus_root=$DATA_ROOT_ABS source=$DATA_SRC"
+    up_emit "corpus_url=$CORPUS_URL"
+
+    # -- 0a. resolve, then decide: reuse or fetch ----------------------
+    if corpus_complete; then
+        up_emit "corpus=reused root=$DATA_ROOT_ABS source=$DATA_SRC"
+    else
+        up_emit "corpus=missing root=$DATA_ROOT_ABS source=$DATA_SRC"
+
+        # -- 0b. fetch (partial clone + sparse-checkout) ---------------
+        if ! command -v git >/dev/null 2>&1; then
+            up_fail "corpus-clone-failed: git is not on PATH; set SNOWBALL_DATA_ROOT to an existing corpus copy"
+            return "$EXIT_UNPACK"
+        fi
+        _up_git_version=$(git --version 2>/dev/null | sed -n 's/.* \([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | sed -n 1p)
+        _up_git_major=${_up_git_version%%.*}
+        _up_git_minor=${_up_git_version#*.}
+        [ -n "$_up_git_version" ] || { _up_git_major=0; _up_git_minor=0; }
+        up_emit "corpus_git_version=${_up_git_version:-unknown}"
+
+        # git refuses to clone into a non-empty directory, so a root that
+        # exists without being a clone cannot be fetched into: say so
+        # instead of failing obscurely.
+        _up_parent=$(dirname "$DATA_ROOT_ABS")
+        mkdir -p "$_up_parent" 2>/dev/null || true
+        if [ -d "$DATA_ROOT_ABS" ] && [ ! -d "$DATA_ROOT_ABS/.git" ]; then
+            up_fail "corpus-clone-failed: $DATA_ROOT_ABS exists but is not a git clone and does not hold a complete corpus; move it away or set SNOWBALL_DATA_ROOT to a complete copy"
+            return "$EXIT_UNPACK"
+        fi
+
+        if [ "$_up_git_major" -gt 2 ] || { [ "$_up_git_major" -eq 2 ] && [ "$_up_git_minor" -ge 19 ]; }; then
+            up_emit "corpus_fetch=partial-clone filter=blob:none sparse=1"
+            if ! git clone --depth 1 --filter=blob:none --sparse "$CORPUS_URL" "$DATA_ROOT_ABS" >>"$CORPUS_LOG" 2>&1; then
+                up_fail "corpus-clone-failed: git clone --filter=blob:none --sparse $CORPUS_URL $DATA_ROOT_ABS failed; if this machine already has the corpus, set SNOWBALL_DATA_ROOT to point at it, or set SNOWBALL_CORPUS_URL to a reachable mirror"
+                return "$EXIT_UNPACK"
+            fi
+        else
+            up_emit "corpus_fetch=depth-1-clone filter=none (git $_up_git_version < 2.19, --filter unsupported)"
+            if ! git clone --depth 1 "$CORPUS_URL" "$DATA_ROOT_ABS" >>"$CORPUS_LOG" 2>&1; then
+                up_fail "corpus-clone-failed: git clone --depth 1 $CORPUS_URL $DATA_ROOT_ABS failed; if this machine already has the corpus, set SNOWBALL_DATA_ROOT to point at it, or set SNOWBALL_CORPUS_URL to a reachable mirror"
+                return "$EXIT_UNPACK"
+            fi
+        fi
+
+        # The sparse set is re-entrant: re-running the stage resumes it.
+        if ! ( cd "$DATA_ROOT_ABS" && git sparse-checkout set english porter french german spanish italian portuguese dutch dutch_porter russian arabic turkish ) >>"$CORPUS_LOG" 2>&1; then
+            up_fail "corpus-clone-failed: git sparse-checkout set failed in $DATA_ROOT_ABS; re-run the stage (it is re-entrant) or set SNOWBALL_DATA_ROOT to an existing corpus copy"
+            return "$EXIT_UNPACK"
+        fi
+        up_emit "corpus=fetched root=$DATA_ROOT_ABS"
+    fi
+
+    # -- 0c. completeness assertion ------------------------------------
+    if ! corpus_complete; then
+        _up_missing=""
+        for _up_lang in $CORPUS_LANGS; do
+            if [ ! -f "$DATA_ROOT_ABS/$_up_lang/voc.txt" ] && [ ! -f "$DATA_ROOT_ABS/$_up_lang/voc.txt.gz" ]; then
+                _up_missing="$_up_missing $_up_lang(voc)"
+            elif [ ! -f "$DATA_ROOT_ABS/$_up_lang/output.txt" ] && [ ! -f "$DATA_ROOT_ABS/$_up_lang/output.txt.gz" ]; then
+                _up_missing="$_up_missing $_up_lang(output)"
+            fi
+        done
+        up_fail "MISSING corpus after fetch:$_up_missing (root=$DATA_ROOT_ABS); set SNOWBALL_DATA_ROOT to an existing corpus copy"
+        return "$EXIT_UNPACK"
+    fi
+    up_emit "corpus_complete 11/11 root=$DATA_ROOT_ABS"
+    if [ -d "$DATA_ROOT_ABS/$CORPUS_OPTIONAL" ]; then
+        up_emit "optional $CORPUS_OPTIONAL present"
+    else
+        up_emit "optional $CORPUS_OPTIONAL absent (N/A)"
+    fi
+    _up_du=$(du -sh "$DATA_ROOT_ABS" 2>/dev/null | awk '{print $1}')
+    up_emit "corpus_du=${_up_du:-unknown}"
+
+    # -- 1. snapshot (the destructive-op precondition) ------------------
+    UP_SNAPSHOT_DATE=$(date +%Y%m%d-%H%M%S)
+    if [ -d "$UNPACK_DST" ]; then
+        _up_snap="$SNAPSHOT_ROOT/u2-t8-$UP_SNAPSHOT_DATE"
+        mkdir -p "$SNAPSHOT_ROOT" 2>/dev/null || true
+        if ! cp -r "$UNPACK_DST" "$_up_snap" 2>/dev/null || [ ! -d "$_up_snap" ]; then
+            up_fail "unpack failed: cannot snapshot $UNPACK_DST into $_up_snap"
+            return "$EXIT_UNPACK"
+        fi
+        log_line "snapshot: preserved $UNPACK_DST -> $_up_snap"
+        up_emit "snapshot=$_up_snap"
+    else
+        log_line "snapshot: nothing to preserve ($UNPACK_DST does not exist)"
+        up_emit "snapshot=none ($UNPACK_DST absent)"
+    fi
+
+    # -- 2. the arabic corpus ------------------------------------------
+    if [ ! -f "$UNPACK_SCRIPT" ]; then
+        up_fail "unpack failed: the unpack script is missing: $UNPACK_SCRIPT"
+        return "$EXIT_UNPACK"
+    fi
+    if [ ! -d "$DATA_ROOT_ABS/arabic" ]; then
+        up_fail "unpack failed: missing $DATA_ROOT_ABS/arabic (absolute: $DATA_ROOT_ABS/arabic)"
+        return "$EXIT_UNPACK"
+    fi
+    # tools/unpack_arabic.sh appends its own evidence to $UNPACK_LOG and
+    # prints the same lines, so nothing is redirected here (a redirect would
+    # duplicate every line and hide the failure text from the operator).
+    SNOWBALL_UNPACK_LOG="$UNPACK_LOG" sh "$UNPACK_SCRIPT" "$DATA_ROOT_ABS/arabic" "$UNPACK_DST"
+    _up_rc=$?
+    if [ "$_up_rc" -ne 0 ]; then
+        up_fail "unpack failed: tools/unpack_arabic.sh $DATA_ROOT_ABS/arabic $UNPACK_DST exited $_up_rc"
+        return "$EXIT_UNPACK"
+    fi
+
+
+    return 0
 }
 
 stage_generate() {
