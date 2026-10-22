@@ -1,6 +1,7 @@
 pkgtype(kind: "executable")
 
 import {
+  "vicoproplus/moon_snowball/runtime" @rt,
   "moonbitlang/x/fs",
   "moonbitlang/core/env",
 }

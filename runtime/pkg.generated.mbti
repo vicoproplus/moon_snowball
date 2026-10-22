@@ -1,0 +1,86 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "vicoproplus/moon_snowball/runtime"
+
+// Values
+pub fn assign_to(Env) -> String
+
+pub fn eq_s(Env, String) -> Bool
+
+pub fn eq_s_b(Env, String) -> Bool
+
+pub fn eq_v(Env, String) -> Bool
+
+pub fn eq_v_b(Env, String) -> Bool
+
+pub fn find_among(Env, Array[Among]) -> Int
+
+pub fn find_among_b(Env, Array[Among]) -> Int
+
+pub fn find_among_b_linear(Env, Array[Among]) -> Int
+
+pub fn find_among_linear(Env, Array[Among]) -> Int
+
+pub fn get_current(Env) -> String
+
+pub fn go_in_grouping(Env, String) -> Bool
+
+pub fn go_in_grouping_b(Env, String) -> Bool
+
+pub fn go_out_grouping(Env, String) -> Bool
+
+pub fn go_out_grouping_b(Env, String) -> Bool
+
+pub fn in_grouping(Env, String) -> Bool
+
+pub fn in_grouping_b(Env, String) -> Bool
+
+pub fn in_set(String, UInt16) -> Bool
+
+pub fn insert(Env, Int, Int, String) -> Unit
+
+pub fn out_grouping(Env, String) -> Bool
+
+pub fn out_grouping_b(Env, String) -> Bool
+
+pub fn replace_s(Env, Int, Int, String) -> Int
+
+pub fn set_current(Env, String) -> Unit
+
+pub fn slice_del(Env) -> Unit
+
+pub fn slice_from(Env, String) -> Unit
+
+pub fn slice_to(Env) -> String
+
+// Errors
+pub(all) suberror Lab {
+  Lab0
+  Lab1
+  Lab2
+  Lab3
+  Lab4
+}
+
+// Types and methods
+pub(all) struct Among {
+  s : String
+  substring_i : Int
+  result : Int
+  cb : ((Env) -> Bool)?
+}
+pub fn Among::new(String, Int, Int, cb? : ((Env) -> Bool)?) -> Self
+
+pub(all) struct Env {
+  mut current : String
+  mut cursor : Int
+  mut limit : Int
+  mut limit_backward : Int
+  mut bra : Int
+  mut ket : Int
+}
+pub fn Env::new(String) -> Self
+pub fn Env::set_current(Self, String) -> Unit
+
+// Type aliases
+
+// Traits
