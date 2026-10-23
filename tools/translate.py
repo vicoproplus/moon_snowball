@@ -217,7 +217,8 @@ class Translator:
             return "true" if n.value else "false"
         if isinstance(n.value, str):
             if as_char:
-                assert len(n.value) == 1, n.value
+                if len(n.value) != 1:
+                    raise Unsupported("char-literal", n.lineno)
                 return char_lit(n.value)
             return str_lit(n.value)
         if n.value is None:

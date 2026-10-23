@@ -587,6 +587,16 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 
+# An empty --stage value is a usage error, not "all six stages": it is almost
+# always a shell-variable typo, and silently running everything hides it.
+# This rejection runs before the audit mode below, which tests only
+# `[ -n "$STAGE_ARG" ]` and would otherwise read the empty value as "no --stage
+# given", run the audit and exit 0.
+if [ "$STAGE_SET" -eq 1 ] && [ -z "$STAGE_ARG" ]; then
+    log_err "--stage needs a stage name (expected one of: $STAGES)"
+    exit "$EXIT_USAGE"
+fi
+
 # ---------------------------------------------------------------------------
 # FR-22 audit mode — `--audit-paths` runs tools/audit_paths.py and exits with
 # its verdict (0 = no Windows absolute path in scripts/, tools/, cmd/golden/).
@@ -617,13 +627,6 @@ fi
 # a shell-variable typo, and silently running everything hides it.
 if [ "$ONLY_SET" -eq 1 ] && [ -z "$ONLY_ARG" ]; then
     log_err "--only needs a stage name (expected one of: $STAGES)"
-    exit "$EXIT_USAGE"
-fi
-
-# The same typo class applies to --stage: an empty value would otherwise read
-# as "no selection" and launch all six stages (a full run).  Reject it.
-if [ "$STAGE_SET" -eq 1 ] && [ -z "$STAGE_ARG" ]; then
-    log_err "--stage needs a stage name (expected one of: $STAGES)"
     exit "$EXIT_USAGE"
 fi
 
