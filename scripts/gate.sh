@@ -2,13 +2,13 @@
 # scripts/gate.sh — the tri-state gate of the golden stage (Task 7 / FR-21).
 #
 # Usage:
-#   sh scripts/gate.sh <golden-log> [driver-exit]
+#   sh scripts/gate.sh <golden-log> <driver-exit>
 #
 # <golden-log> is the file `moon run cmd/golden` wrote (stdout+stderr merged);
-# [driver-exit] is the exit code of that run, captured as `$?` right after the
-# command (never through a pipe).  When the argument is omitted it defaults to
-# 0, so a caller that only has the log still gets the row/checked/mismatch
-# assertions.
+# <driver-exit> is the exit code of that run, captured as `$?` right after the
+# command (never through a pipe).  The second argument is MANDATORY: a
+# default of 0 would let a one-argument caller pass a log whose driver
+# actually failed, so an omitted value is a usage error (exit 2).
 #
 # The gate is the ONLY judge of the golden run.  It reads the log structurally
 # — every `lang=<n> checked=<N> mismatch=<M> ms=<t>` row is parsed into
@@ -25,26 +25,31 @@
 #             `checked` that does not match  -> `expected 12 rows, got <n>`
 #             (plus the missing names) or `checked mismatch <lang> want=<N>
 #             got=<M>`, exit 1
-#   failed    a non-zero `mismatch`, or a non-zero driver exit ->
-#             `FAIL: mismatch != 0` (up to 5 `MISMATCH` detail lines) or
-#             `driver exit=<rc> rows=<n>`, exit 1
+#   failed    a non-zero `mismatch`, a non-zero driver exit, any collected
+#             `MISMATCH` detail line, a missing `golden: 12/12 mismatch=0`
+#             summary or a missing `case=` boundary line ->
+#             `FAIL: mismatch != 0` (up to 5 `MISMATCH` detail lines),
+#             `driver exit=<rc> rows=<n>`, `FAIL: <n> MISMATCH detail line(s)
+#             present`, `FAIL: missing driver summary 'golden: 12/12
+#             mismatch=0'` or `FAIL: missing driver boundary line 'case='`,
+#             exit 1
 #
 # Exit codes: 0 pass, 1 any assertion failed, 2 usage error (missing log
-# argument, too many arguments, a non-numeric driver exit).
+# argument or driver exit, too many arguments, a non-numeric driver exit).
 
 set -u
 
 usage() {
-    printf 'usage: sh scripts/gate.sh <golden-log> [driver-exit]\n' >&2
+    printf 'usage: sh scripts/gate.sh <golden-log> <driver-exit>\n' >&2
 }
 
-if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+if [ "$#" -lt 2 ] || [ "$#" -gt 2 ]; then
     usage
     exit 2
 fi
 
 GATE_LOG=$1
-DRIVER_RC=${2:-0}
+DRIVER_RC=$2
 
 case "$DRIVER_RC" in
     '' | *[!0-9]*)
@@ -123,10 +128,25 @@ BEGIN {
 }
 
 # The driver prints at most five detail lines; the gate forwards at most five.
+# A collected detail line is evidence in its own right: a healthy run never
+# emits one, so its presence is asserted below, not merely printed.
 /^MISMATCH / {
     if (ndet < 5) {
         det[++ndet] = $0
     }
+}
+
+# The summary line the driver prints (`golden: <ok>/<rows> mismatch=<sum>`)
+# and its boundary assertion (`case=...`) are the two lines the row checks
+# imply: a truncated transcript could satisfy the twelve rows and still have
+# neither.
+/^golden: / {
+    if ($0 == "golden: 12/12 mismatch=0") {
+        nsum++
+    }
+}
+/^case=/ {
+    ncase++
 }
 
 END {
@@ -169,15 +189,43 @@ END {
     }
 
     # 4. every row reports zero mismatch.
+    det_printed = 0
     for (i = 1; i <= nrows; i++) {
         if (got_mismatch[names[i]] != 0) {
             printf "FAIL: mismatch != 0\n"
             for (j = 1; j <= ndet; j++) {
                 print det[j]
             }
+            det_printed = 1
             bad = 1
             break
         }
+    }
+
+    # 5. a collected MISMATCH detail line is itself a failure.  The rows and
+    #    the details can disagree (a driver that printed a detail line and
+    #    then summarised mismatch=0), and the detail is the stronger evidence:
+    #    it is never ignored because the twelve rows happen to look clean.
+    if (ndet > 0) {
+        printf "FAIL: %d MISMATCH detail line(s) present\n", ndet
+        if (!det_printed) {
+            for (j = 1; j <= ndet; j++) {
+                print det[j]
+            }
+        }
+        bad = 1
+    }
+
+    # 6. the driver summary line must be present and must be the healthy one.
+    if (nsum < 1) {
+        printf "FAIL: missing driver summary '\''golden: 12/12 mismatch=0'\''\n"
+        bad = 1
+    }
+
+    # 7. the driver boundary assertion line must be present.
+    if (ncase < 1) {
+        printf "FAIL: missing driver boundary line '\''case='\''\n"
+        bad = 1
     }
 
     if (bad) {

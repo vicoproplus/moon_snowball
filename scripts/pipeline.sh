@@ -18,7 +18,8 @@
 #     because a stage that is wired may still be preceded by a stage that is
 #     honestly red: --only lets a single stage be exercised without touching
 #     the other five.  --stage and --only are mutually exclusive.
-#     An empty `--only=` is a usage error (exit 2), never "all six".
+#     An empty `--only=` or `--stage=` is a usage error (exit 2), never
+#     "all six": both are almost always shell-variable typos.
 #
 # The generate stage (Task 3) runs the upstream Snowball 3.2.0 compiler.
 # The compiler is a Linux ELF, so the generation always happens inside WSL:
@@ -59,9 +60,11 @@
 # stay 11/11 + 10/10; the vendored file is a separate 1/1 claim.
 #
 # Log: .planning/logs/u2/T2-entry.log — one field per line.  The field
-#     vocabulary is stage=, lang=, file=, line=, exit=, elapsed=, cmd=, plus
-#     the resolved-root lines "data_root=<abs> source=<flag|env|default>" and
-#     the host line "host=<git-bash|wsl>".  A stage opens with "stage=<name>"
+#     vocabulary is stage=, lang=, file=, line=, exit=, elapsed=, cmd=, the
+#     FR-17 timing fields total=, stages=<n>, stage_names=<a,b,...> and
+#     stage_sum=, the resolved-root lines
+#     "data_root=<abs> source=<flag|env|default>" and the host line
+#     "host=<git-bash|wsl>".  A stage opens with "stage=<name>"
 #     and closes with "stage=<name> exit=<code>".  No ANSI escape sequence
 #     is ever written, and stdin is never read.
 #
@@ -487,6 +490,25 @@ usage() {
     printf '%s\n' "  --audit-paths run only the FR-22 absolute-path audit and exit"
 }
 
+# resolve_python — the ONE python resolver, shared by `--audit-paths` and the
+# toolchain preflight so the two can never disagree about the same PATH.
+# `python` is preferred, `python3` is accepted; whichever resolves is printed
+# and becomes the logged `python=<name>`.  Nothing else is consulted: the
+# Windows `py` launcher may register a 2.x interpreter, and a second resolver
+# for the same question is how a run and the audit ended up with different
+# verdicts.  Returns 1 when neither name resolves.
+resolve_python() {
+    if command -v python >/dev/null 2>&1; then
+        printf '%s\n' python
+        return 0
+    fi
+    if command -v python3 >/dev/null 2>&1; then
+        printf '%s\n' python3
+        return 0
+    fi
+    return 1
+}
+
 # ---------------------------------------------------------------------------
 # Arguments
 # ---------------------------------------------------------------------------
@@ -499,6 +521,7 @@ STAGE_ARG=""
 ONLY_ARG=""
 ONLY_SET=0
 AUDIT_PATHS=0
+STAGE_SET=0
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -536,10 +559,14 @@ while [ "$#" -gt 0 ]; do
             ONLY_SET=1
             ONLY_ARG="$1"
             ;;
-        --stage=*) STAGE_ARG="${1#--stage=}" ;;
+        --stage=*)
+            STAGE_SET=1
+            STAGE_ARG="${1#--stage=}"
+            ;;
         --stage)
             shift
             [ "$#" -gt 0 ] || { log_err "--stage needs a value"; exit "$EXIT_USAGE"; }
+            STAGE_SET=1
             STAGE_ARG="$1"
             ;;
         --audit-paths) AUDIT_PATHS=1 ;;
@@ -573,7 +600,7 @@ if [ "$AUDIT_PATHS" -eq 1 ]; then
         log_err "--audit-paths is a mode of its own (not combinable with --stage/--only)"
         exit "$EXIT_USAGE"
     fi
-    _ap_py=$(command -v python 2>/dev/null) || _ap_py=$(command -v python3 2>/dev/null) || _ap_py=""
+    _ap_py=$(resolve_python) || _ap_py=""
     if [ -z "$_ap_py" ]; then
         log_err "audit-paths: python not found"
         exit "$EXIT_TOOLCHAIN"
@@ -590,6 +617,13 @@ fi
 # a shell-variable typo, and silently running everything hides it.
 if [ "$ONLY_SET" -eq 1 ] && [ -z "$ONLY_ARG" ]; then
     log_err "--only needs a stage name (expected one of: $STAGES)"
+    exit "$EXIT_USAGE"
+fi
+
+# The same typo class applies to --stage: an empty value would otherwise read
+# as "no selection" and launch all six stages (a full run).  Reject it.
+if [ "$STAGE_SET" -eq 1 ] && [ -z "$STAGE_ARG" ]; then
+    log_err "--stage needs a stage name (expected one of: $STAGES)"
     exit "$EXIT_USAGE"
 fi
 
@@ -780,44 +814,14 @@ if [ -d "$HOME/.moon/bin" ]; then
 fi
 
 MISSING=""
-PYTHON_BIN=""
-if command -v python >/dev/null 2>&1; then
-    PYTHON_BIN=python
-elif command -v python3 >/dev/null 2>&1; then
-    PYTHON_BIN=python3
-else
-    # Narrow fallback: on a Windows host python is often registered with the
-    # `py` launcher without being on PATH.  The fallback is used only when
-    # neither `python` nor `python3` resolves, never preferred over them, and
-    # a launcher that names no runnable interpreter still ends in the exit-3
-    # preflight.  The concrete interpreter is resolved (never the launcher
-    # itself, which needs an extra -V argument) and converted to the POSIX
-    # form the shell can execute.  The launcher path comes from the
-    # environment, never from a hard-coded drive letter (FR-22).
-    _pf_launcher=""
-    for _pf_cand in "${SYSTEMROOT:-}/py.exe" "${WINDIR:-}/py.exe"; do
-        case "$_pf_cand" in
-            /py.exe) continue ;;
-        esac
-        if [ -f "$_pf_cand" ] && [ -x "$_pf_cand" ]; then
-            _pf_launcher="$_pf_cand"
-            break
-        fi
-    done
-    if [ -n "$_pf_launcher" ] && command -v cygpath >/dev/null 2>&1; then
-        _pf_py_win=$("$_pf_launcher" -0p 2>/dev/null | sed -n 's/.*[[:space:]]\([A-Za-z]:[\\/][^[:space:]]*[Pp]ython[0-9.]*\.exe\)[[:space:]]*$/\1/p')
-        for _pf_py in $_pf_py_win; do
-            _pf_py_u=$(cygpath -u "$_pf_py" 2>/dev/null) || continue
-            [ -x "$_pf_py_u" ] || continue
-            if "$_pf_py_u" -c "" >/dev/null 2>&1; then
-                PYTHON_BIN="$_pf_py_u"
-                break
-            fi
-        done
-    fi
-    if [ -z "$PYTHON_BIN" ]; then
-        MISSING="$MISSING python"
-    fi
+# One resolver, shared with --audit-paths (see resolve_python above): both
+# names are accepted, whichever is found is logged as `python=<name>`, and a
+# PATH with neither stops the run here with `python not found` as the first
+# stderr line (FR-15).  There is no launcher fallback: a second discovery path
+# would let the same PATH pass a run and fail the audit.
+PYTHON_BIN=$(resolve_python) || PYTHON_BIN=""
+if [ -z "$PYTHON_BIN" ]; then
+    MISSING="$MISSING python"
 fi
 command -v moon >/dev/null 2>&1 || MISSING="$MISSING moon"
 command -v gzip >/dev/null 2>&1 || MISSING="$MISSING gzip"
@@ -2111,12 +2115,15 @@ stage_golden() {
     #      thing that may say `GATE OK`.
     #
     # Paths: the driver resolves its own data root (`--data-root` >
-    # SNOWBALL_DATA_ROOT > `.planning/data/sd`) and its own arabic plain-text
-    # directory (`--arabic-dir` > `<root>/arabic` > `build/data/arabic`).
-    # The stage only forwards an explicitly requested root, so the default
-    # run exercises exactly the driver's own resolution.  A forwarded path is
-    # converted to the form the native executable can open (`cygpath -w`
-    # under Git-Bash); nothing is hard-coded.
+    # SNOWBALL_DATA_ROOT > `.planning/data/sd`), but its arabic plain-text
+    # directory is ALWAYS forwarded: the driver would otherwise fall back to
+    # `<cwd>/build/data/arabic`, a third default outside the declared ladder
+    # (flag > env > module-relative).  The value forwarded is the one the
+    # unpack stage resolved ($UNPACK_DST), so the pipeline and the driver
+    # cannot disagree about where the arabic corpus lives; an empty value is
+    # fatal rather than a silent fallback.  Forwarded paths are converted to
+    # the form the native executable can open (`cygpath -w` under Git-Bash);
+    # nothing is hard-coded.
     # ------------------------------------------------------------------
 
     _g_start=$(date +%s)
@@ -2130,15 +2137,27 @@ stage_golden() {
     fi
 
     # -- 1. the driver ---------------------------------------------------
+    # The arabic directory is mandatory here: it is the pipeline's own
+    # resolved artifact, never the driver's `<cwd>/build/data/arabic` guess.
+    if [ -z "${UNPACK_DST:-}" ]; then
+        log_err "golden failed: UNPACK_DST is empty (the arabic directory the unpack stage resolves) - refusing to let the driver fall back to its own default"
+        log_err "stage=golden exit=$EXIT_GOLDEN"
+        return "$EXIT_GOLDEN"
+    fi
+    _g_arabic="$UNPACK_DST"
+    if [ "$HOST" = git-bash ] && command -v cygpath >/dev/null 2>&1; then
+        _g_arabic=$(cygpath -w "$UNPACK_DST")
+    fi
     if [ "$DATA_SRC" = default ]; then
-        ( cd "$MODULE_ROOT" && moon run cmd/golden ) >"$GOLDEN_LOG" 2>&1
+        ( cd "$MODULE_ROOT" && moon run cmd/golden --arabic-dir "$_g_arabic" ) \
+            >"$GOLDEN_LOG" 2>&1
     else
         _g_data="$DATA_ROOT_ABS"
         if [ "$HOST" = git-bash ] && command -v cygpath >/dev/null 2>&1; then
             _g_data=$(cygpath -w "$DATA_ROOT_ABS")
         fi
-        ( cd "$MODULE_ROOT" && moon run cmd/golden --data-root "$_g_data" ) \
-            >"$GOLDEN_LOG" 2>&1
+        ( cd "$MODULE_ROOT" && moon run cmd/golden --data-root "$_g_data" \
+            --arabic-dir "$_g_arabic" ) >"$GOLDEN_LOG" 2>&1
     fi
     _g_rc=$?
 
@@ -2267,7 +2286,8 @@ done
 if [ "$_stages_n" -eq 6 ]; then
     _total=$((_now - RUN_T0))
     emit_field total "$_total"
-    emit_field stages "$(printf '%s' "$RUN_STAGES" | tr ' ' ',')"
+    emit_field stages "$_stages_n"
+    emit_field stage_names "$(printf '%s' "$RUN_STAGES" | tr ' ' ',')"
     emit_field stage_sum "$STAGE_SUM"
     _delta=$((_total - STAGE_SUM))
     if [ "$_delta" -lt 0 ]; then

@@ -102,7 +102,8 @@ class Translator:
             if isinstance(node, ast.ClassDef) and node.bases and \
                     isinstance(node.bases[0], ast.Name) and node.bases[0].id == "BaseStemmer":
                 self.cls = node
-        assert self.cls is not None, "no class deriving BaseStemmer"
+        if self.cls is None:
+            raise Unsupported("no-basestemmer-class", 1)
         for item in self.cls.body:
             if isinstance(item, ast.FunctionDef):
                 self.methods.add(item.name)
@@ -110,6 +111,10 @@ class Translator:
                 tgt = item.targets[0]
                 if isinstance(tgt, ast.Name):
                     self.consts[tgt.id] = item.value
+            elif isinstance(item, ast.AnnAssign):
+                # An annotated class constant (`a_0: list = [...]`) is a shape
+                # emit_const never sees; it must be refused here, not dropped.
+                raise Unsupported("const-shape", item.lineno)
         for node in ast.walk(self.t):
             if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) \
                     and node.value.id == "self":
@@ -313,7 +318,8 @@ class Translator:
         return [pad + "let _ = " + expr]
 
     def s_Assign(self, s, ind, pad):
-        assert len(s.targets) == 1, ast.dump(s)
+        if len(s.targets) != 1:
+            raise Unsupported("chained-assign", s.lineno)
         return [pad + self.e(s.targets[0]) + " = " + self.e(s.value)]
 
     def s_AugAssign(self, s, ind, pad):
@@ -332,7 +338,8 @@ class Translator:
     def s_Raise(self, s, ind, pad):
         exc = s.exc
         name = exc.func.id if isinstance(exc, ast.Call) else exc.id
-        assert name.startswith("lab"), name
+        if not (isinstance(name, str) and name.startswith("lab")):
+            raise Unsupported("raise", s.lineno)
         return [pad + f"raise @{self.rt}.Lab" + name[3:]]
 
     def s_If(self, s, ind, pad):
@@ -368,7 +375,12 @@ class Translator:
         return out
 
     def s_Try(self, s, ind, pad):
-        assert len(s.handlers) == 1 and not s.orelse and not s.finalbody
+        if len(s.handlers) != 1:
+            raise Unsupported("multi-except", s.lineno)
+        if s.orelse:
+            raise Unsupported("try-else", s.lineno)
+        if s.finalbody:
+            raise Unsupported("try-finally", s.lineno)
         h = s.handlers[0]
         lab = h.type.id
         out = [pad + "try {"] + self.stmts(s.body, ind + 1) + [pad + "} catch {"]
@@ -382,6 +394,12 @@ class Translator:
 
     # ------------------------------------------------------------------ output
     def among_expr(self, el):
+        # The callee is part of the shape: a class-level `A('a', -1, 1)`
+        # (an alias of Among) is the same call the expression context refuses,
+        # so both contexts reach the same `unsupported: call` verdict.
+        if not (isinstance(el, ast.Call) and isinstance(el.func, ast.Name)
+                and el.func.id == "Among"):
+            raise Unsupported("call", getattr(el, "lineno", 0))
         if len(el.args) >= 4 or el.keywords:
             # Among(s, substring_i, result, __r_foo): the callback would have
             # to capture the stemmer struct at module-level table initialisation,
@@ -410,7 +428,8 @@ class Translator:
         if isinstance(val, ast.Set):
             members = []
             for el in val.elts:
-                assert isinstance(el, ast.Constant), ast.dump(el)
+                if not isinstance(el, ast.Constant):
+                    raise Unsupported("const-set-element", el.lineno)
                 if el.value not in members:
                     members.append(el.value)
             return f"let {mangle(name)} : String = {str_lit(''.join(members))}"
@@ -422,7 +441,7 @@ class Translator:
             # A grouping with no members needing escapes is emitted as a plain
             # string literal (`g_aeo = "aeo"`), not a set literal.
             return f"let {mangle(name)} : String = {str_lit(val.value)}"
-        return None
+        raise Unsupported("const-shape", getattr(val, "lineno", 0))
 
     def run(self):
         self.analyse()
