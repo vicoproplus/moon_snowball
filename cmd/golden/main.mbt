@@ -1,68 +1,141 @@
-// Golden-file driver for Snowball stemmers (U1-a first version, Task 6).
+// Golden-file driver for the twelve Snowball stemmers (Task 7 / FR-12..FR-14).
 //
-// Spec §2.2 data flow: resolve the corpus root (SNOWBALL_DATA_ROOT, else
-// <cwd>/.planning/data/sd), reject missing files, reject voc/output line-count
-// mismatches, compare every stemmed word against output.txt, and print one
-// summary line per language.
+// Twelve rows = the eleven registry entries (`lang_registry.mbt`, contract §3)
+// plus the porter311 control row (contract §3.4: same corpus as porter, never
+// in the registry).  Each row is compared line by line against
+// `<corpus>/<lang>/output.txt` and reported as
 //
-// The wired language list is intentionally empty in U1-a: `<module>/porter`
-// and `<module>/english` do not exist until U1-b (blocked on the U2 pipeline).
-// Task 7 fills `wired_langs` with the porter/english callbacks; the data
-// readiness checks below already validate both corpora unconditionally.
+//     lang=<n> checked=<N> mismatch=<M> ms=<t>
+//
+// with the `lang=` prefix the prototype lacked (SCD-08).  After the twelve
+// comparison rows the driver prints twelve
+//
+//     lang=<n> lines=<M>
+//
+// rows carrying the line count of the generated `<lang>/<lang>_gen.mbt`.
+// Task 12 (FR-20) judges each of those rows against the committed baseline
+// below and appends ` WARN line-count drift` when the count moves more than
+// 20% away from it, then prints the summary row
+//
+//     line-count drift: <k>/12
+//
+// with k the number of warned rows.  A WARN is a warning, never a failure:
+// `scripts/gate.sh` judges only the comparison rows.  The driver is judged
+// by that gate; it never prints `GATE OK` itself.
+//
+// Data root precedence (R-2 / contract §4): `--data-root <p>` >
+// `SNOWBALL_DATA_ROOT` > module-relative `.planning/data/sd` (resolved against
+// the current directory, which is the module root under `moon run`).  The
+// resolved root is printed as an absolute path at startup; no absolute path is
+// ever hardcoded here.
+//
+// arabic ships gzipped upstream and MoonBit has no gzip: the driver never
+// opens a `.gz`.  Its plain text is the unpacked artifact the pipeline's
+// unpack stage writes to `<module root>/build/data/arabic`, so a compressed
+// registry entry resolves to
+//
+//     `--arabic-dir <p>` > `<data root>/arabic` (when it already holds plain
+//     `voc.txt` + `output.txt`) > `<cwd>/build/data/arabic`
+//
+// and the chosen directory plus its source is printed at startup.
 
 ///|
-/// One wired language: the name used in `lang=` lines plus its stem callback.
-/// Only `wired_langs` constructs values of this type (Task 7).
-pub struct Lang {
+/// One gate row: registry name, corpus directory, whether the corpus is
+/// stored compressed upstream, and the stem callback.  The declared
+/// `checked` value is not duplicated here: the gate reads it from
+/// `lang_registry.mbt`, so there is exactly one source for it.
+struct Row {
   name : String
+  dir : String
+  compressed : Bool
   stem : (String) -> String raise @rt.Lab
 }
 
 ///|
-/// Constructor used by `wired_langs` (Task 7 appends the porter/english
-/// entries with it).
-pub fn Lang::new(
-  name : String,
-  stem : (String) -> String raise @rt.Lab,
-) -> Lang {
-  { name, stem }
+/// The C `exit` primitive: the driver decides its own exit code (0 clean,
+/// 1 corpus/comparison failure, 2 usage) instead of relying on an uncaught
+/// error's status.  `exit` flushes the C stdio buffers the runtime uses.
+extern "c" fn native_exit(code : Int) = "exit"
+
+///|
+/// Abort with one stderr line.  The caller (`main`) turns the raised error
+/// into exit code 1; the message stays the first stderr line.
+fn[T] fail(msg : String) -> T raise @fs.IOError {
+  eprintln(msg)
+  raise @fs.IOError(msg)
 }
 
 ///|
-/// Corpora that must be present and line-consistent before any comparison
-/// runs (spec §2.2 steps 2-3). Task 7 pairs each name with a callback.
-fn required_langs() -> Array[String] {
-  ["porter", "english"]
-}
-
-///|
-/// Languages wired to a stem callback. U1-a ships this empty on purpose:
-/// porter/english are U1-b and would otherwise import packages that do not
-/// exist yet. Task 7 (U1-b) fills this with the porter/english entries.
-fn wired_langs() -> Array[Lang] {
-  let langs : Array[Lang] = []
-  langs
-}
-
-///|
-/// Split on LF, dropping the trailing-newline pseudo-line (spec §2.2: read
-/// UTF-8, strip the line-end LF). A final line without LF is kept.
-fn split_lines(s : String) -> Array[String] {
-  let out : Array[String] = []
-  let mut start = 0
-  let mut i = 0
-  let n = s.length()
-  while i < n {
-    if s[i] == '\n' {
-      out.push(s.view(start_offset=start, end_offset=i).to_owned())
-      start = i + 1
+/// The twelve rows, in registry order plus the porter311 control row last.
+/// Every callback is built once around a single stemmer instance, so the
+/// per-word call allocates nothing beyond the word itself.
+fn wired_rows() -> Array[Row] raise @fs.IOError {
+  let rows : Array[Row] = []
+  for e in @registry.langs {
+    let stem : (String) -> String raise @rt.Lab = match e.name {
+      "arabic" => {
+        let p = @arabic.Arabic::new()
+        word => @arabic.stem_word(p, word)
+      }
+      "dutch" => {
+        let p = @dutch.Dutch::new()
+        word => @dutch.stem_word(p, word)
+      }
+      "english" => {
+        let p = @english.English::new()
+        word => @english.stem_word(p, word)
+      }
+      "french" => {
+        let p = @french.French::new()
+        word => @french.stem_word(p, word)
+      }
+      "german" => {
+        let p = @german.German::new()
+        word => @german.stem_word(p, word)
+      }
+      "italian" => {
+        let p = @italian.Italian::new()
+        word => @italian.stem_word(p, word)
+      }
+      "porter" => {
+        let p = @porter.Porter::new()
+        word => @porter.stem_word(p, word)
+      }
+      "portuguese" => {
+        let p = @portuguese.Portuguese::new()
+        word => @portuguese.stem_word(p, word)
+      }
+      "russian" => {
+        let p = @russian.Russian::new()
+        word => @russian.stem_word(p, word)
+      }
+      "spanish" => {
+        let p = @spanish.Spanish::new()
+        word => @spanish.stem_word(p, word)
+      }
+      "turkish" => {
+        let p = @turkish.Turkish::new()
+        word => @turkish.stem_word(p, word)
+      }
+      _ => fail("golden: unknown registry entry: \{e.name}")
     }
-    i += 1
+    rows.push(
+      { name: e.name, dir: e.golden_dir, compressed: e.compressed, stem },
+    )
   }
-  if start < n {
-    out.push(s.view(start_offset=start).to_owned())
-  }
-  out
+  // The control row reuses porter's corpus (contract §3.4) and is reported
+  // under its own name; its declared `checked` value is porter's, which the
+  // gate derives from the registry.
+  let p311 = @porter311.Porter311::new()
+  rows.push(
+    {
+      name: "porter311",
+      dir: "porter",
+      compressed: false,
+      stem: word => @porter311.stem_word(p311, word),
+    },
+  )
+  rows
 }
 
 ///|
@@ -79,8 +152,7 @@ fn is_absolute_path(p : String) -> Bool {
 
 ///|
 /// Join a base directory with a relative fragment using `/` (accepted by the
-/// native IO layer on every platform) and collapse trailing separators so the
-/// resolved root prints cleanly.
+/// native IO layer on every platform) and collapse trailing separators.
 fn join_path(base : String, rel : String) -> String {
   let mut end = base.length()
   while end > 0 && (base[end - 1] == '/' || base[end - 1] == '\\') {
@@ -99,144 +171,275 @@ fn join_path(base : String, rel : String) -> String {
 }
 
 ///|
-/// Spec §2.2 step 1: SNOWBALL_DATA_ROOT wins; otherwise the module-root
-/// relative `.planning/data/sd` resolved against the current directory.
-/// No absolute path is ever hardcoded here.
-fn resolve_data_root() -> String raise @fs.IOError {
-  let fallback = ".planning/data/sd"
-  let raw = match @env.get_env_var("SNOWBALL_DATA_ROOT") {
-    Some(v) => if v.length() == 0 { fallback } else { v }
-    None => fallback
+/// The current directory as an absolute path, or a hard error: every path the
+/// driver prints must be absolute.
+fn cwd() -> String raise @fs.IOError {
+  match @env.current_dir() {
+    Some(d) =>
+      if is_absolute_path(d) {
+        d
+      } else {
+        fail("golden: cannot resolve the absolute current directory: \{d}")
+      }
+    None => fail("golden: cannot resolve data root: current directory unavailable")
   }
-  if is_absolute_path(raw) {
-    raw
+}
+
+///|
+/// Make `p` absolute: an already-absolute value is kept, anything else is
+/// resolved against the current directory.
+fn absolute(p : String) -> String raise @fs.IOError {
+  if is_absolute_path(p) {
+    p
   } else {
-    match @env.current_dir() {
-      Some(cwd) => join_path(cwd, raw)
-      None => {
-        let msg = "golden: cannot resolve data root: current directory unavailable"
-        eprintln(msg)
-        raise @fs.IOError(msg)
+    join_path(cwd(), p)
+  }
+}
+
+///|
+/// Data root precedence: `--data-root` > `SNOWBALL_DATA_ROOT` > the
+/// module-relative default `.planning/data/sd`.  Returns the absolute path and
+/// the winning source (`flag` / `env` / `default`).
+fn resolve_data_root(flag : String?) -> (String, String) raise @fs.IOError {
+  match flag {
+    Some(p) => (absolute(p), "flag")
+    None =>
+      match @env.get_env_var("SNOWBALL_DATA_ROOT") {
+        Some(v) =>
+          if v.length() == 0 {
+            (absolute(".planning/data/sd"), "default")
+          } else {
+            (absolute(v), "env")
+          }
+        None => (absolute(".planning/data/sd"), "default")
+      }
+  }
+}
+
+///|
+/// True when a directory already holds the arabic plain-text pair.
+fn has_plain_arabic(dir : String) -> Bool {
+  @fs.path_exists(join_path(dir, "voc.txt")) &&
+  @fs.path_exists(join_path(dir, "output.txt"))
+}
+
+///|
+/// Where arabic's plain text lives (see the file header): `--arabic-dir` >
+/// `<data root>/arabic` when already unpacked > `<cwd>/build/data/arabic`
+/// (the artifact the pipeline's unpack stage writes).  The driver never opens
+/// the `.gz` files.
+fn resolve_arabic_dir(flag : String?, data_root : String) -> (String, String) raise @fs.IOError {
+  match flag {
+    Some(p) => (absolute(p), "flag")
+    None => {
+      let in_root = join_path(data_root, "arabic")
+      if has_plain_arabic(in_root) {
+        (in_root, "data-root")
+      } else {
+        (absolute("build/data/arabic"), "build")
       }
     }
   }
 }
 
 ///|
-/// Spec §2.2 step 3: a missing corpus file must abort before any summary line
-/// with the absolute path and the literal `missing` on stderr.
-fn require_file(path : String) -> Unit raise @fs.IOError {
+/// The corpus directory of one row: compressed entries (arabic) use the
+/// unpacked directory, everything else `<data root>/<dir>`.
+fn row_dir(row : Row, data_root : String, arabic_dir : String) -> String {
+  if row.compressed {
+    arabic_dir
+  } else {
+    join_path(data_root, row.dir)
+  }
+}
+
+///|
+/// A missing corpus file must abort with the ABSOLUTE path and the literal
+/// `missing` as the first stderr line, before any summary is printed.
+fn require_file(path : String, lang : String) -> Unit raise @fs.IOError {
   if !@fs.path_exists(path) {
-    let msg = "golden: missing corpus file: \{path}"
-    eprintln(msg)
-    raise @fs.IOError(msg)
+    fail("golden: missing corpus file for \{lang}: \{path}")
   }
   if !@fs.is_file(path) {
-    let msg = "golden: missing regular corpus file: \{path}"
-    eprintln(msg)
-    raise @fs.IOError(msg)
+    fail("golden: missing regular corpus file for \{lang}: \{path}")
   }
 }
 
 ///|
-/// Read a UTF-8 corpus file and split it into lines. The encoding name is
-/// `utf8` (not `utf-8`) for `moonbitlang/x/fs`.
-fn file_lines(path : String) -> Array[String] raise @fs.IOError {
-  split_lines(@fs.read_file_to_string(path, encoding="utf8"))
+/// Number of lines under the driver's own reading rule: every LF starts a new
+/// line, and a final line without LF still counts.  Identical to the
+/// `split_lines` rule the earlier version used.
+fn count_lines(s : String) -> Int {
+  let n = s.length()
+  let mut count = 0
+  let mut i = 0
+  while i < n {
+    if s[i] == '\n' {
+      count += 1
+    }
+    i += 1
+  }
+  if n > 0 && s[n - 1] != '\n' {
+    count += 1
+  }
+  count
 }
 
 ///|
-/// Spec §2.2 steps 2-3 for one language: both files must exist and carry the
-/// same number of lines; otherwise print both counts and exit non-zero before
-/// the per-line loop starts.
-fn validate_lang(root : String, name : String) -> Unit raise @fs.IOError {
-  let voc_path = join_path(root, name + "/voc.txt")
-  let out_path = join_path(root, name + "/output.txt")
-  require_file(voc_path)
-  require_file(out_path)
-  let voc_n = file_lines(voc_path).length()
-  let out_n = file_lines(out_path).length()
+/// One row: read both files, assert equal line counts (before the per-line
+/// loop), compare every stemmed word with the golden output, show at most five
+/// `MISMATCH` detail lines, and print the `lang=... checked=... mismatch=...`
+/// row.  Returns the mismatch count.
+fn run_one(row : Row, voc_path : String, out_path : String) -> Int raise @fs.IOError {
+  let voc = @fs.read_file_to_string(voc_path, encoding="utf8")
+  let exp = @fs.read_file_to_string(out_path, encoding="utf8")
+  let voc_n = count_lines(voc)
+  let out_n = count_lines(exp)
   if voc_n != out_n {
     println("voc=\{voc_n} output=\{out_n}")
-    let msg = "golden: line count mismatch for \{name}: voc=\{voc_n} output=\{out_n}"
-    eprintln(msg)
-    raise @fs.IOError(msg)
+    fail(
+      "golden: line count mismatch for \{row.name}: voc=\{voc_n} output=\{out_n} (voc=\{voc_path} output=\{out_path})",
+    )
   }
-}
-
-///|
-/// Spec §2.2 steps 4-5 for one wired language: compare each word with the
-/// golden output, show at most 5 five-field mismatch lines, then print one
-/// `lang=<n> checked=<N> mismatch=<M> ms=<t>` summary. Returns the mismatch
-/// count so the caller can choose a non-zero exit.
-fn run_one(
-  lang : Lang,
-  voc_path : String,
-  out_path : String,
-) -> Int raise @fs.IOError {
-  let voc = file_lines(voc_path)
-  let exp = file_lines(out_path)
+  let t0 = @env.now()
   let mut checked = 0
   let mut mismatch = 0
   let mut shown = 0
-  let n = if voc.length() < exp.length() {
-    voc.length()
-  } else {
-    exp.length()
-  }
-  let t0 = @env.now()
-  while checked < n {
-    let word = voc[checked]
-    let stem = lang.stem
-    let got = stem(word) catch { _ => "<lab escaped>" }
-    if got != exp[checked] {
+  let vn = voc.length()
+  let en = exp.length()
+  let mut vs = 0
+  let mut es = 0
+  while vs < vn && es < en {
+    let mut ve = vs
+    while ve < vn && voc[ve] != '\n' {
+      ve += 1
+    }
+    let mut ee = es
+    while ee < en && exp[ee] != '\n' {
+      ee += 1
+    }
+    let word = voc.view(start_offset=vs, end_offset=ve).to_owned()
+    let want = exp.view(start_offset=es, end_offset=ee)
+    let got = (row.stem)(word) catch { _ => "<lab escaped>" }
+    if !(got.view() == want) {
       mismatch += 1
       if shown < 5 {
         shown += 1
         println(
-          "lang=\{lang.name} line=\{checked + 1} word=\{word} want=\{exp[checked]} got=\{got}",
+          "MISMATCH lang=\{row.name} line=\{checked + 1} voc=\{word} want=\{want.to_owned()} got=\{got}",
         )
       }
     }
     checked += 1
+    vs = ve + 1
+    es = ee + 1
   }
   let elapsed = @env.now() - t0
-  println("lang=\{lang.name} checked=\{checked} mismatch=\{mismatch} ms=\{elapsed}")
+  println(
+    "lang=\{row.name} checked=\{checked} mismatch=\{mismatch} ms=\{elapsed}",
+  )
   mismatch
 }
 
 ///|
-/// Run every wired language. `langs` is empty in U1-a, so this prints zero
-/// `lang=` lines; Task 7 makes it print the porter/english pair. The line-count
-/// self-check exists now (0 == 0) and becomes the "exactly 2 lang lines" guard
-/// once the list is populated.
-fn run_all(langs : Array[Lang], root : String) -> Int raise @fs.IOError {
-  let mut failed = 0
-  let mut emitted = 0
-  for lang in langs {
-    let mismatch = run_one(
-      lang,
-      join_path(root, lang.name + "/voc.txt"),
-      join_path(root, lang.name + "/output.txt"),
-    )
-    emitted += 1
-    if mismatch != 0 {
-      failed += 1
-    }
-  }
-  if emitted != langs.length() {
-    let msg = "golden: expected \{langs.length()} lang lines but emitted \{emitted}"
-    eprintln(msg)
-    raise @fs.IOError(msg)
-  }
-  failed
+/// Line count of the generated package source `<name>/<name>_gen.mbt`, as the
+/// `lang=<n> lines=<M>` row (Task 12's drift baseline).
+fn gen_lines(module_root : String, name : String) -> Int raise @fs.IOError {
+  let path = join_path(module_root, name + "/" + name + "_gen.mbt")
+  require_file(path, name)
+  count_lines(@fs.read_file_to_string(path, encoding="utf8"))
 }
 
 ///|
-/// Boundary segment (FR-09/FR-19). Task 6 carries the runtime-primitive case:
-/// `go_out_grouping(Env("bcda"), "aeiou")` walks b, c, d and stops on the
-/// member `a` at cursor 3, returning true. The word-boundary cases ("", "s",
-/// "'", "y") are deferred to Task 9 (they need a stem callback).
+/// Line-count baselines of the twelve generated packages (Task 12 / FR-20).
+///
+/// Source: spec F-U2-21, the T5 post-`moon fmt` committed form of each
+/// `<lang>/<lang>_gen.mbt` (10,837 lines for the eleven deliverable packages,
+/// 11,407 including the porter311 control row).  This is the ONE baseline
+/// table; it is in row order (registry order, porter311 last).  The registry's
+/// own `lines` field is the CORPUS line count, so it cannot serve here.
+fn baseline_rows() -> Array[(String, Int)] {
+  [
+    ("arabic", 1063),
+    ("dutch", 1572),
+    ("english", 885),
+    ("french", 1171),
+    ("german", 553),
+    ("italian", 837),
+    ("porter", 538),
+    ("portuguese", 730),
+    ("russian", 511),
+    ("spanish", 768),
+    ("turkish", 2209),
+    ("porter311", 570),
+  ]
+}
+
+///|
+/// The baseline for one row name.  An unknown name is a driver bug, not a
+/// silently accepted row: fail instead of guessing a baseline.
+fn baseline_of(name : String) -> Int raise @fs.IOError {
+  for entry in baseline_rows() {
+    if entry.0 == name {
+      return entry.1
+    }
+  }
+  fail("golden: no line-count baseline for \{name}")
+}
+
+///|
+/// True when `measured` drifted more than 20% from `baseline`, i.e.
+/// `|M - B| / B > 0.20`.  Evaluated as `|M - B| * 5 > B` so the comparison is
+/// exact and a move of exactly 20% does not warn.
+fn line_count_drifted(measured : Int, baseline : Int) -> Bool {
+  let diff = if measured >= baseline {
+    measured - baseline
+  } else {
+    baseline - measured
+  }
+  diff * 5 > baseline
+}
+
+///|
+/// Parse `--data-root` / `--arabic-dir` (space or `=` form).  Anything else is
+/// a usage error (exit 2) — never a silent fallback.
+fn parse_args(args : Array[String]) -> (String?, String?) raise @fs.IOError {
+  let mut data_root : String? = None
+  let mut arabic_dir : String? = None
+  let mut i = 0
+  let n = args.length()
+  while i < n {
+    let a = args[i]
+    if a == "--data-root" {
+      if i + 1 >= n {
+        fail("golden: --data-root needs a value")
+      }
+      data_root = Some(args[i + 1])
+      i += 2
+    } else if a.length() > 12 &&
+      a.view(start_offset=0, end_offset=12).to_owned() == "--data-root=" {
+      data_root = Some(a.view(start_offset=12).to_owned())
+      i += 1
+    } else if a == "--arabic-dir" {
+      if i + 1 >= n {
+        fail("golden: --arabic-dir needs a value")
+      }
+      arabic_dir = Some(args[i + 1])
+      i += 2
+    } else if a.length() > 13 &&
+      a.view(start_offset=0, end_offset=13).to_owned() == "--arabic-dir=" {
+      arabic_dir = Some(a.view(start_offset=13).to_owned())
+      i += 1
+    } else {
+      fail("golden: unknown argument: \{a}")
+    }
+  }
+  (data_root, arabic_dir)
+}
+
+///|
+/// Boundary segment (FR-09/FR-19): `go_out_grouping(Env("bcda"), "aeiou")`
+/// walks b, c, d and stops on the member `a` at cursor 3.
 fn check_boundary_case() -> Unit {
   let env = @rt.Env::new("bcda")
   let result = @rt.go_out_grouping(env, "aeiou")
@@ -253,30 +456,90 @@ fn check_boundary_case() -> Unit {
 }
 
 ///|
-/// Exit-code contract (spec §2.2, §4.5 U1-F1..F3): a missing root or file, a
-/// line-count mismatch, a per-line mismatch, or a failed boundary assertion
-/// all exit non-zero; only a clean run exits 0.
-fn main raise @fs.IOError {
-  let root = resolve_data_root()
-  println("data_root=\{root}")
-  if !@fs.path_exists(root) {
-    let msg = "golden: data root is missing: \{root}"
-    eprintln(msg)
-    raise @fs.IOError(msg)
+/// The whole run.  Returns the process exit code: 0 only when every row
+/// exists, every line-count pre-check holds, every row reports zero
+/// mismatches and every `lines=` row could be read.
+fn run() -> Int raise @fs.IOError {
+  let argv = @env.args()
+  let args = if argv.length() > 1 {
+    argv[1:].to_owned()
+  } else {
+    ([] : Array[String])
   }
-  if !@fs.is_dir(root) {
-    let msg = "golden: data root is not a directory: \{root}"
-    eprintln(msg)
-    raise @fs.IOError(msg)
+  let (data_root_flag, arabic_flag) = parse_args(args)
+  let (data_root, data_src) = resolve_data_root(data_root_flag)
+  let (arabic_dir, arabic_src) = resolve_arabic_dir(arabic_flag, data_root)
+  println("data_root=\{data_root} source=\{data_src}")
+  println("arabic_dir=\{arabic_dir} source=\{arabic_src}")
+
+  if !@fs.path_exists(data_root) {
+    fail("golden: data root is missing: \{data_root}")
   }
-  for name in required_langs() {
-    validate_lang(root, name)
+  if !@fs.is_dir(data_root) {
+    fail("golden: data root is not a directory: \{data_root}")
   }
-  let failed = run_all(wired_langs(), root)
+
+  let rows = wired_rows()
+  // Pre-flight every corpus file before the first comparison: a missing file
+  // must leave no `mismatch=` row behind.
+  for row in rows {
+    let dir = row_dir(row, data_root, arabic_dir)
+    require_file(join_path(dir, "voc.txt"), row.name)
+    require_file(join_path(dir, "output.txt"), row.name)
+  }
+
+  let mut failed = 0
+  let mut total_mismatch = 0
+  let mut ok = 0
+  for row in rows {
+    let dir = row_dir(row, data_root, arabic_dir)
+    let mismatch = run_one(
+      row,
+      join_path(dir, "voc.txt"),
+      join_path(dir, "output.txt"),
+    )
+    if mismatch != 0 {
+      failed += 1
+    } else {
+      ok += 1
+    }
+    total_mismatch += mismatch
+  }
+
+  // The `lines=` block (Task 12's drift baseline): one row per language, in
+  // the same order as the comparison rows, each judged against the committed
+  // baseline and marked with ` WARN line-count drift` when it moved >20%.
+  let module_root = cwd()
+  let mut warned = 0
+  for row in rows {
+    let lines = gen_lines(module_root, row.name)
+    let baseline = baseline_of(row.name)
+    if line_count_drifted(lines, baseline) {
+      warned += 1
+      println("lang=\{row.name} lines=\{lines} WARN line-count drift")
+    } else {
+      println("lang=\{row.name} lines=\{lines}")
+    }
+  }
+  println("line-count drift: \{warned}/\{rows.length()}")
+
+  println("golden: \{ok}/\{rows.length()} mismatch=\{total_mismatch}")
   check_boundary_case()
   if failed != 0 {
-    let msg = "golden: \{failed} language(s) reported mismatches"
-    eprintln(msg)
-    raise @fs.IOError(msg)
+    fail(
+      "golden: \{failed} language(s) reported mismatches (total mismatch=\{total_mismatch})",
+    )
   }
+  0
+}
+
+///|
+/// Exit-code contract: 0 only for a clean run; 1 for a missing corpus file,
+/// a voc/output line-count mismatch, a per-line mismatch, or an unknown
+/// argument.  The gate treats any non-zero code as a failed run.
+fn main {
+  let code = run() catch {
+    _ => 1
+  }
+  native_exit(code)
 }
