@@ -18,19 +18,19 @@ pub(all) suberror Lab {
 /// Mutable cursor state, mirrors `struct SN_env` (api.c:38-42).
 pub(all) struct Env {
   mut current : String
-  mut cursor : Int
-  mut limit : Int
-  mut limit_backward : Int
-  mut bra : Int
-  mut ket : Int
+  mut cursor : Int32
+  mut limit : Int32
+  mut limit_backward : Int32
+  mut bra : Int32
+  mut ket : Int32
 }
 
 ///|
 /// One row of a Snowball `among` table (basestemmer.py:1-12).
 pub(all) struct Among {
   s : String
-  substring_i : Int
-  result : Int
+  substring_i : Int32
+  result : Int32
   cb : ((Env) -> Bool)?
 }
 
@@ -74,11 +74,11 @@ pub fn get_current(e : Env) -> String {
 ///|
 pub fn Among::new(
   s : String,
-  substring_i : Int,
-  result : Int,
+  substring_i : Int32,
+  result : Int32,
   cb~ : ((Env) -> Bool)? = None,
 ) -> Self {
-  { s, substring_i, result, cb }
+  { s, substring_i, result, cb, }
 }
 
 // ---------------------------------------------------------------- groupings
@@ -283,7 +283,7 @@ pub fn eq_v_b(e : Env, s : String) -> Bool {
 /// The content is rewritten unconditionally (even when `adjustment == 0`), but
 /// `limit`/`cursor` are adjusted only inside `if adjustment != 0` — including
 /// the `else if cursor > c_bra` arm, exactly as in C.
-pub fn replace_s(e : Env, c_bra : Int, c_ket : Int, s : String) -> Int {
+pub fn replace_s(e : Env, c_bra : Int32, c_ket : Int32, s : String) -> Int32 {
   let adjustment = s.length() - (c_ket - c_bra)
   e.current = e.current.view(end_offset=c_bra).to_owned() +
     s +
@@ -348,7 +348,7 @@ pub fn slice_del(e : Env) -> Unit {
 /// then adjust `ket`/`bra` by the same `adjustment` — both shifts live inside
 /// `if c_bra <= ket`, which is the C branch structure (the Python variant
 /// differs here).
-pub fn insert(e : Env, c_bra : Int, c_ket : Int, s : String) -> Unit {
+pub fn insert(e : Env, c_bra : Int32, c_ket : Int32, s : String) -> Unit {
   let adjustment = s.length() - (c_ket - c_bra)
   let _ = replace_s(e, c_bra, c_ket, s)
   if c_bra <= e.ket {
@@ -381,7 +381,7 @@ pub fn assign_to(e : Env) -> String {
 ///|
 /// Unsigned code-unit value of `s` at `i`, the `ord()` operand used by the
 /// among comparisons (strings are UTF-16, so one code unit is one symbol).
-fn code_point(s : String, i : Int) -> Int {
+fn code_point(s : String, i : Int32) -> Int32 {
   s[i].to_int()
 }
 
@@ -396,7 +396,7 @@ fn code_point(s : String, i : Int) -> Int {
 /// A match sets `cursor = c + len(w.s)`; with a callback the cursor is set
 /// before `f(e)` and again only when the callback returns true. Exhausting the
 /// chain returns 0 with the cursor untouched.
-pub fn find_among(e : Env, v : Array[Among]) -> Int {
+pub fn find_among(e : Env, v : Array[Among]) -> Int32 {
   let mut i = 0
   let mut j = v.length()
   let c = e.cursor
@@ -471,7 +471,7 @@ pub fn find_among(e : Env, v : Array[Among]) -> Int {
 /// so `diff = -1`. A match sets `cursor = c - len(w.s)` (the callback is
 /// re-applied exactly as in the forward search), and exhausting the suffix
 /// chain returns 0 with the cursor untouched.
-pub fn find_among_b(e : Env, v : Array[Among]) -> Int {
+pub fn find_among_b(e : Env, v : Array[Among]) -> Int32 {
   let mut i = 0
   let mut j = v.length()
   let c = e.cursor
@@ -545,7 +545,7 @@ pub fn find_among_b(e : Env, v : Array[Among]) -> Int {
 /// Linear longest-match scan of the forward table. Verification-only: it does
 /// not consult `substring_i` or `cb`. Returns 0 with the cursor untouched when
 /// no entry matches, otherwise sets `cursor = c + len(match)`.
-pub fn find_among_linear(e : Env, v : Array[Among]) -> Int {
+pub fn find_among_linear(e : Env, v : Array[Among]) -> Int32 {
   let c = e.cursor
   let mut best = -1
   let mut best_len = -1
@@ -581,7 +581,7 @@ pub fn find_among_linear(e : Env, v : Array[Among]) -> Int {
 /// Linear longest-match scan of the backward table. Verification-only: it does
 /// not consult `substring_i` or `cb`. Returns 0 with the cursor untouched when
 /// no entry matches, otherwise sets `cursor = c - len(match)`.
-pub fn find_among_b_linear(e : Env, v : Array[Among]) -> Int {
+pub fn find_among_b_linear(e : Env, v : Array[Among]) -> Int32 {
   let c = e.cursor
   let mut best = -1
   let mut best_len = -1

@@ -5,6 +5,7 @@ Run from the module root, ALWAYS after `moon info` (D-8: a `.mbti` assertion
 taken before the refresh can be false-green — see the T6 report, Step A).
 
     python tools/check_gate.py [--json PATH] [--mbti-log PATH] [--dialect-log PATH]
+                               [--golden-log PATH]
 
 What it asserts
 ---------------
@@ -33,6 +34,15 @@ D-12 (amended)      `cmd/golden/main.mbt` has an explicit non-zero exit path:
                     `let code = run() catch { _ => 1 }; native_exit(code)`).
                     Controller ruling 2026-10-23; see the D-12 revision
                     blockquote in the plan.
+BOUNDARY (--golden-log)
+                    the U3 Latin spec §4.4 boundary transcript, pinned from the
+                    `moon run cmd/golden` stdout log: exactly one
+                    `boundary: latin failed=0` line, exactly one line with
+                    `same=true` and no line with `same=false`, the 16
+                    B-01..B-16 exact lines, six lines each of B-17..B-21 and
+                    zero `ok=false` lines.  The option is only asserted when it
+                    is given, but a given path that does not exist is a named
+                    failure (exit 1) — never a silent pass.
 
 Exit codes: 0 pass, 1 an assertion failed, 2 usage / missing input.
 Nothing here writes into a source package: the only writes are the two logs
@@ -400,6 +410,168 @@ def check_red_lines(root, rels, dialect_log):
 
 
 # ---------------------------------------------------------------------------
+# U3 spec §4.4 — the Latin boundary transcript (--golden-log)
+# ---------------------------------------------------------------------------
+
+# B-01..B-16 as the transcript must spell them.  The expected values are the
+# spec's; the pairs are corpus-anchored (spec §4.4 "语料锚点" column), and the
+# `á` line legitimately appears once for portuguese (B-12) and once for dutch
+# (B-15), so presence — not uniqueness — is what each entry asserts.
+BOUNDARY_EXACT = [
+    "case=abaisse got=abaiss ok=true",
+    "case=abaissait got=abaiss ok=true",
+    "case=abaissé got=abaiss ok=true",
+    "case=aargauer got=aargau ok=true",
+    "case=aashöllen got=aasholl ok=true",
+    "case=abenddämmerung got=abenddammer ok=true",
+    "case=aarón got=aaron ok=true",
+    "case=abandonó got=abandon ok=true",
+    "case=abarcará got=abarc ok=true",
+    "case=abbandonerà got=abbandon ok=true",
+    "case=abbandonò got=abbandon ok=true",
+    "case=á got=á ok=true",
+    "case=ã got=ã ok=true",
+    "case=aacho got=aach ok=true",
+    "case=á got=á ok=true",
+    "case=áan got=áan ok=true",
+]
+
+# B-17..B-21, each observed once per language (six languages): the count is
+# the assertion.  B-19/B-20 accept any output (`<s>`: uppercase input is out of
+# scope, spec §4.1 U3-D3), B-21 reports lengths only.
+BOUNDARY_UNIVERSAL = [
+    ("B-17 empty string", re.compile(r'^case="" got="" ok=true$'), 6),
+    ("B-18 pure punctuation", re.compile(r"^case=- got=- ok=true$"), 6),
+    ("B-19 uppercase Aargauer", re.compile(r"^case=Aargauer got=.+ ok=true$"), 6),
+    ("B-20 uppercase Strasse", re.compile(r"^case=Strasse got=.+ ok=true$"), 6),
+    ("B-21 10,000-char input", re.compile(r"^case=<len=10000> got=<len=[0-9]+> ok=true$"), 6),
+]
+
+
+def check_latin_boundaries(path):
+    """Pin the U3 spec §4.4 boundary transcript read from `path`.
+
+    The transcript is the `moon run cmd/golden` stdout log.  What is pinned:
+    exactly one `boundary: latin failed=0` summary, exactly one `same=true`
+    line (the FR-17 dutch instance-reuse verdict) and no `same=false`, zero
+    `ok=false` lines, and the Latin block as a contiguous 48-line window
+    anchored at the unique B-01 line: B-01..B-16 exact and in spec order,
+    then six languages x (empty, dash, Aargauer, Strasse), then six B-21
+    length observations, the reuse verdict, and the summary.  Anchoring on
+    B-01 rather than on global counts keeps the pin independent of the
+    porter/english cases U1-b prints in `check_boundary_case` (those also
+    emit `case=""`).  A missing log is fail-closed: a named failure, never a
+    silent pass.
+
+    Returns `(ok, detail)`; `detail` is the report printed by `main`.
+    """
+    p = pathlib.Path(path)
+    if not p.is_file():
+        # fail-closed: a path we were told to assert on that does not exist is
+        # a failure, never a skip.  The named error is registered here (and
+        # repeated in the GATE FAIL summary by `main`), so the detail list
+        # stays empty to avoid printing it a third time.
+        fail("BOUNDARY FAIL: --golden-log file does not exist: %s" % p)
+        return False, []
+    lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+    out = ["U3 boundary transcript: %s (%d lines)" % (p, len(lines))]
+    ok = True
+
+    def judge(label, got, want):
+        nonlocal ok
+        good = got == want
+        out.append("BOUNDARY %-42s got=%-3d want=%-3d %s"
+                   % (label, got, want, "OK" if good else "FAIL"))
+        if not good:
+            ok = False
+            fail("BOUNDARY FAIL: %s = %d, expected %d" % (label, got, want))
+
+    judge("`boundary: latin failed=0` lines",
+          sum(1 for l in lines if l == "boundary: latin failed=0"), 1)
+    judge("lines containing `same=true`",
+          sum(1 for l in lines if "same=true" in l), 1)
+    judge("lines containing `same=false`",
+          sum(1 for l in lines if "same=false" in l), 0)
+    judge("lines containing `ok=false`",
+          sum(1 for l in lines if "ok=false" in l), 0)
+
+    # The Latin block is pinned POSITIONALLY, anchored at the unique B-01 line,
+    # not by global counts: the porter/english cases U1-b prints in
+    # `check_boundary_case` also emit `case=""`, so a global empty-string count
+    # would drift whenever another language's cases change.
+    anchor = BOUNDARY_EXACT[0]
+    try:
+        start = lines.index(anchor)
+    except ValueError:
+        fail("BOUNDARY FAIL: B-01 anchor line missing: %s" % anchor)
+        return False, out
+
+    want_len = len(BOUNDARY_EXACT) + 4 * 6 + 6 + 2  # B-01..16 + universal + reuse + summary
+    block = lines[start:start + want_len]
+    if len(block) != want_len:
+        ok = False
+        fail("BOUNDARY FAIL: transcript ends %d line(s) into the Latin block "
+             "(need %d)" % (len(block), want_len))
+
+    for i, want in enumerate(BOUNDARY_EXACT):
+        got = block[i] if i < len(block) else "<missing>"
+        good = got == want
+        out.append("BOUNDARY B-%02d %-44s %s"
+                   % (i + 1, want, "OK" if good else "FAIL"))
+        if not good:
+            ok = False
+            fail("BOUNDARY FAIL: B-%02d at block offset %d: got %r want %r"
+                 % (i + 1, i, got, want))
+
+    pos = len(BOUNDARY_EXACT)
+    for _lang in range(6):
+        for label, rx, _want in BOUNDARY_UNIVERSAL[:4]:
+            got = block[pos] if pos < len(block) else "<missing>"
+            good = bool(rx.match(got))
+            out.append("BOUNDARY %-42s offset=%-2d %s"
+                       % (label, pos, "OK" if good else "FAIL"))
+            if not good:
+                ok = False
+                fail("BOUNDARY FAIL: %s at block offset %d: got %r"
+                     % (label, pos, got))
+            pos += 1
+    for _lang in range(6):
+        label, rx, _want = BOUNDARY_UNIVERSAL[4]
+        got = block[pos] if pos < len(block) else "<missing>"
+        good = bool(rx.match(got))
+        out.append("BOUNDARY %-42s offset=%-2d %s"
+                   % (label, pos, "OK" if good else "FAIL"))
+        if not good:
+            ok = False
+            fail("BOUNDARY FAIL: %s at block offset %d: got %r"
+                 % (label, pos, got))
+        pos += 1
+
+    got_reuse = block[pos] if pos < len(block) else "<missing>"
+    good = "same=true" in got_reuse
+    out.append("BOUNDARY %-42s offset=%-2d %s"
+               % ("dutch reuse `same=true`", pos, "OK" if good else "FAIL"))
+    if not good:
+        ok = False
+        fail("BOUNDARY FAIL: dutch reuse line at block offset %d: got %r"
+             % (pos, got_reuse))
+    pos += 1
+    got_summary = block[pos] if pos < len(block) else "<missing>"
+    good = got_summary == "boundary: latin failed=0"
+    out.append("BOUNDARY %-42s offset=%-2d %s"
+               % ("latin summary", pos, "OK" if good else "FAIL"))
+    if not good:
+        ok = False
+        fail("BOUNDARY FAIL: latin summary at block offset %d: got %r"
+             % (pos, got_summary))
+
+    if not ok:
+        fail("BOUNDARY FAIL: the Latin boundary transcript does not match "
+             "spec §4.4 (see the rows above)")
+    return ok, out
+
+
+# ---------------------------------------------------------------------------
 
 def main():
     ap = argparse.ArgumentParser(description="T6 compile-gate assertions")
@@ -407,6 +579,13 @@ def main():
                     help="the moon check --json log (not re-read here; kept for plumbing)")
     ap.add_argument("--mbti-log", default=None)
     ap.add_argument("--dialect-log", default=None)
+    ap.add_argument("--golden-log", default=None,
+                    help="the `moon run cmd/golden` stdout log; when given, the "
+                         "U3 §4.4 Latin boundary transcript is pinned (one "
+                         "`boundary: latin failed=0`, one `same=true`, no "
+                         "`same=false`, the 16 B-01..B-16 exact lines, six each "
+                         "of B-17..B-21, zero `ok=false`); a missing file is a "
+                         "failure, not a skip")
     args = ap.parse_args()
 
     root = pathlib.Path.cwd().resolve()
@@ -440,7 +619,18 @@ def main():
     red_only.unlink()
     dialect_log.write_text(d1_text + red_text, encoding="utf-8")
 
-    if FAILS:
+    # U3 spec §4.4: the boundary transcript, pinned only when asked for.  A
+    # given-but-missing path has already registered a failure in FAILS.
+    boundary_ok = True
+    if args.golden_log:
+        boundary_ok, boundary_detail = check_latin_boundaries(args.golden_log)
+        for line in boundary_detail:
+            print(line)
+    else:
+        print("BOUNDARY: --golden-log not given; the U3 §4.4 transcript is "
+              "NOT pinned by this run")
+
+    if FAILS or not boundary_ok:
         print("")
         for f in FAILS:
             print("GATE FAIL: %s" % f, file=sys.stderr)

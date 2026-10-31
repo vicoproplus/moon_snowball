@@ -29,7 +29,7 @@ pub let langs : Array[LangEntry] = [
     golden_dir : "dutch",
     lines : 45670,
     compressed : false,
-    charset : "á（U+00E1）等 ISO-8859-1 区重音",
+    charset : "á(U+00E1)、à、ä、é、è、ë、í、ï、ó、ö、ú、ü",
   },
   {
     name : "english",
@@ -45,7 +45,7 @@ pub let langs : Array[LangEntry] = [
     golden_dir : "french",
     lines : 21653,
     compressed : false,
-    charset : "é/è/ç 等",
+    charset : "é(U+00E9)、è、ê、ç、à、ô、û 等拉丁补充区；语料 NFC、无组合字符",
   },
   {
     name : "german",
@@ -53,7 +53,7 @@ pub let langs : Array[LangEntry] = [
     golden_dir : "german",
     lines : 35053,
     compressed : false,
-    charset : "ä/ö/ü/ß",
+    charset : "ä(U+00E4)、ö、ü、ß(U+00DF)；ß 是单码点（非 ss 连写）",
   },
   {
     name : "italian",
@@ -61,7 +61,7 @@ pub let langs : Array[LangEntry] = [
     golden_dir : "italian",
     lines : 37426,
     compressed : false,
-    charset : "à/è/ì/ò/ù",
+    charset : "à(U+00E0)、è、é、ì、ò、ù",
   },
   {
     name : "porter",
@@ -77,7 +77,7 @@ pub let langs : Array[LangEntry] = [
     golden_dir : "portuguese",
     lines : 32016,
     compressed : false,
-    charset : "á/à/ã/ç",
+    charset : "á、à、â、ã(U+00E3)、ç、é、ê、í、ó、ô、õ、ú",
   },
   {
     name : "russian",
@@ -93,7 +93,7 @@ pub let langs : Array[LangEntry] = [
     golden_dir : "spanish",
     lines : 28378,
     compressed : false,
-    charset : "á/é/í/ó/ú/ñ",
+    charset : "á(U+00E1)、é、í、ó、ú、ñ(U+00F1)",
   },
   {
     name : "turkish",

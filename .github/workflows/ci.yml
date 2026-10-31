@@ -1,0 +1,282 @@
+# .github/workflows/ci.yml — moon_snowball release contract (spec §4.6, CI-1 … CI-8).
+#
+# One entry point, no duplicated verdicts: the golden gate is `scripts/pipeline.sh`
+# (U2's single entry point) and the pre-release gate is `scripts/preflight.sh`
+# (U5 Task 6).  Nothing here re-implements a stage judgement; every step only
+# runs the local command and reports `step=` / `cmd=` / `exit=`.
+#
+# Local dry-run evidence is partial — this is exactly what was and was not
+# hand-run here (commands and exit codes in .planning/logs/u5/task5.log):
+#   * `moon version`, `moon check --json` — run, exit 0.
+#   * `sh scripts/pipeline.sh --only=golden` — run, exit 0 (golden stage only;
+#     the workflow itself calls the pipeline with no flags, see the KNOWN RED
+#     note below).
+#   * `moon fmt` + `git diff --exit-code` — deliberately NOT run (skipped by
+#     ruling: the tree has pre-existing fmt drift, see the CI-5 note below).
+#   * `sh scripts/preflight.sh` — run on the logged-in developer machine: four
+#     `=ok` lines, exit 0.  On an unauthenticated runner it is red — see
+#     KNOWN RED #3 below (the script exists; this is not the Task-6 exit 127).
+#   * sparse corpus clone — NOT run locally, deferred to CI (network-heavy;
+#     the same command was measured at 24 s on a working link, 411 s +
+#     `early EOF` for the full clone).
+#   * publish job — NOT run (tag-gated, no tag, no credential).
+#   * runner provisioning (MoonBit toolchain present) is L-1, unverified;
+#     `ubuntu-latest` is a placeholder because runner selection is out of
+#     U5's scope.
+# `uses:` steps (checkout) cannot print the `step=` / `cmd=` / `exit=`
+# fields; all `run:` steps do, on success and on failure.
+#
+# CI-5 note (`moon fmt` + `git diff --exit-code`): the tree at 223f273 is not
+# fmt-clean, so this gate is expected to be red until a dedicated
+# `chore: moon fmt` commit lands.  That is a pre-existing baseline defect,
+# registered in .planning/logs/u5/fmt-diff.txt; the gate is written as the
+# contract requires and is not relaxed here.
+#
+# KNOWN RED #2 (pipeline on a clean checkout — cross-unit gap, escalated to U2,
+# not fixable inside U5): the `pipeline` step calls the no-arg
+# `sh scripts/pipeline.sh` as U2's plan requires, but the generate stage needs
+# two inputs that are git-ignored and therefore absent from a fresh checkout:
+#   * `build/gen/porter_stemmer.py` — `build/` is git-ignored (.gitignore:14).
+#     On a non-WSL host the stage takes the "vendored" branch, and with no
+#     cached porter it refuses: exit 6 (scripts/pipeline.sh:1355-1362).
+#   * `.probe/ctc/sbtest` — `.probe/` is git-ignored (.gitignore:8).  It is the
+#     upstream Snowball compiler and the default `--sb-root`
+#     (scripts/pipeline.sh:744); the WSL/upstream branch cannot generate
+#     without it either.
+# U5 owns neither input (both are U2 territory), and adding them to the
+# repository is outside this unit's write scope.  This step is therefore
+# expected red on the first push until U2 provisions one of them — a committed
+# porter cache or the upstream compiler.  It is left as written: a hard
+# failure, no soft-fail flag of any kind, no extra flags.
+#
+# KNOWN RED #3 (preflight needs the registry account — green locally, red on an
+# unauthenticated runner): the `preflight` step runs
+# `sh scripts/preflight.sh`, and its `metadata=` line runs `moon whoami` plus a
+# `moon publish --dry-run` against mooncakes.io.  With no repository credential
+# on the runner that line fails (`Not logged in`, then `failed to open
+# credentials file: ... please login first`), so the step exits non-zero and
+# `check` can never be green — which also makes the tag-gated `publish` job
+# (`needs: check`) unreachable.  The same script on the logged-in developer
+# machine prints four `=ok` lines and exits 0, so this is a CI credential
+# decision, not a defect in the package.
+# Not softened here on purpose: no token is injected into `check`, and no
+# soft-fail flag of any kind.  Two remediations, owner's choice:
+#   (a) inject the same secret into the `check` job — give the `preflight` step
+#       `env: MOONCAKES_TOKEN: ${{ secrets.MOONCAKES_TOKEN }}` (the value the
+#       `publish` step already reads) and let `scripts/preflight.sh` pass it to
+#       `moon publish --dry-run`; or
+#   (b) add a documented CI mode to `scripts/preflight.sh` that separates the
+#       static metadata assertions (six fields present, author-prefixed name,
+#       `0.x.y` version, license/readme/repository set) from the
+#       `moon whoami` / dry-run network half, and run only the static half on a
+#       credential-less runner.
+# Owner: repo/CI owner (the credential policy; `ci.yml` is a Task 5 delivery,
+# `scripts/preflight.sh` a Task 6 delivery).  Closure: one run reaches
+# `publish` — a build whose `check` job shows `step=preflight` ... `exit=0` on a
+# runner with no interactive login, immediately followed by the tag-gated
+# `publish` job starting.
+name: ci
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+env:
+  # CI-8: no ANSI control sequences in the log, and no colour forcing.  The
+  # environment never defines a colour-forcing variable for the toolchain.
+  NO_COLOR: "1"
+  TERM: dumb
+  # Keep `git diff` from paging when a TTY is attached.
+  GIT_PAGER: cat
+
+jobs:
+  check:
+    name: check
+    # Runner selection is out of U5's scope: `ubuntu-latest` is a placeholder
+    # for "a Linux runner with the MoonBit toolchain on PATH" (L-1).
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      # CI-3: a missing toolchain must fail the job loudly, never skip it.
+      # This is the first step, before anything else needs `moon`.
+      - name: toolchain guard
+        run: |
+          set -euo pipefail
+          echo "step=toolchain"
+          echo "cmd=\"command -v moon\""
+          command -v moon >/dev/null || {
+            echo "moon not found"
+            echo "exit=1"
+            exit 1
+          }
+          echo "exit=0"
+
+      - name: checkout
+        uses: actions/checkout@v4
+
+      # Corpus is not vendored into the repository.  Partial clone + sparse
+      # checkout of the twelve directories the golden gate reads.
+      # `git sparse-checkout set` requires git >= 2.25 — the
+      # `--filter=blob:none` partial-clone flag alone only needs >= 2.19, so
+      # 2.19 is NOT sufficient for this step.  The runner image ships a newer
+      # git; no plain `--depth 1` fallback is implemented here (revisit
+      # together with translator Task 8 step 0b if a pinned runner is older).
+      # Any existing `$RUNNER_TEMP/sd` (retried job, self-hosted runner) is
+      # removed first so the clone is re-entrant.
+      # Failure here is a hard failure: without the corpus the golden gate
+      # cannot be evaluated (CI-4), so it is neither skipped nor softened, and
+      # each command logs its `exit=` even when it fails.
+      - name: fetch golden corpus
+        run: |
+          set -euo pipefail
+          echo "step=fetch-corpus"
+          echo "cmd=\"git clone --depth 1 --filter=blob:none --sparse https://github.com/snowballstem/snowball-data \$RUNNER_TEMP/sd\""
+          rm -rf "$RUNNER_TEMP/sd"
+          set +e
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/snowballstem/snowball-data "$RUNNER_TEMP/sd"
+          rc=$?
+          set -e
+          echo "exit=$rc"
+          [ "$rc" -eq 0 ] || exit "$rc"
+          cd "$RUNNER_TEMP/sd"
+          echo "step=corpus-sparse-checkout"
+          echo "cmd=\"git sparse-checkout set english porter french german spanish italian portuguese dutch dutch_porter russian arabic turkish\""
+          set +e
+          git sparse-checkout set english porter french german spanish italian portuguese dutch dutch_porter russian arabic turkish
+          rc=$?
+          set -e
+          echo "exit=$rc"
+          [ "$rc" -eq 0 ] || exit "$rc"
+          echo "SNOWBALL_DATA_ROOT=$RUNNER_TEMP/sd" >> "$GITHUB_ENV"
+          echo "exit=0"
+
+      - name: moon version
+        run: |
+          set -euo pipefail
+          echo "step=version"
+          echo "cmd=\"moon version\""
+          set +e
+          moon version
+          rc=$?
+          set -e
+          echo "exit=$rc"
+          [ "$rc" -eq 0 ] || exit "$rc"
+
+      # CI-1: whole-module type check on every push.
+      - name: moon check
+        run: |
+          set -euo pipefail
+          echo "step=check"
+          echo "cmd=\"moon check --json\""
+          out="$RUNNER_TEMP/moon-check.json"
+          set +e
+          moon check --json > "$out" 2>&1
+          rc=$?
+          set -e
+          cat "$out"
+          echo "exit=$rc"
+          [ "$rc" -eq 0 ] || exit "$rc"
+
+      # CI-2: the twelve golden rows come from the one local entry point
+      # (`scripts/pipeline.sh`), not from a copy of the stage logic.
+      - name: pipeline
+        timeout-minutes: 60
+        run: |
+          set -euo pipefail
+          echo "step=pipeline"
+          echo "cmd=\"sh scripts/pipeline.sh\""
+          out="$RUNNER_TEMP/pipeline.log"
+          set +e
+          sh scripts/pipeline.sh > "$out" 2>&1
+          rc=$?
+          set -e
+          cat "$out"
+          rows=$(grep -cE '^lang=[^ ]+ checked=[0-9]+ mismatch=0 ' "$out" || true)
+          echo "golden_rows=${rows:-0}"
+          echo "exit=$rc"
+          [ "$rc" -eq 0 ] || exit "$rc"
+
+      # CI-5: format the tree, then prove formatting changed nothing.  The
+      # verdict is the empty `git diff`, not a `moon fmt` exit code.
+      - name: fmt gate
+        run: |
+          set -euo pipefail
+          echo "step=fmt"
+          echo "cmd=\"moon fmt\""
+          set +e
+          moon fmt
+          rc=$?
+          set -e
+          echo "exit=$rc"
+          [ "$rc" -eq 0 ] || exit "$rc"
+          echo "step=fmt-diff"
+          echo "cmd=\"git diff --exit-code\""
+          set +e
+          git diff --exit-code
+          rc=$?
+          set -e
+          echo "exit=$rc"
+          [ "$rc" -eq 0 ] || {
+            echo "fmt drift: 'moon fmt' rewrote tracked files"
+            exit "$rc"
+          }
+
+      # Four-line pre-release contract: metadata= / license= / example= /
+      # golden=, each ok|fail, non-zero exit on any fail.
+      - name: preflight
+        run: |
+          set -euo pipefail
+          echo "step=preflight"
+          echo "cmd=\"sh scripts/preflight.sh\""
+          set +e
+          sh scripts/preflight.sh
+          rc=$?
+          set -e
+          echo "exit=$rc"
+          [ "$rc" -eq 0 ] || exit "$rc"
+
+  # CI-6: publishing exists only for version tags and authenticates solely
+  # through the repository secret injected as an environment variable; no
+  # credential is written into this file.  `needs: check` makes the local
+  # gates a hard precondition of any publish.
+  publish:
+    name: publish
+    needs: check
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: toolchain guard
+        run: |
+          set -euo pipefail
+          echo "step=toolchain"
+          echo "cmd=\"command -v moon\""
+          command -v moon >/dev/null || {
+            echo "moon not found"
+            echo "exit=1"
+            exit 1
+          }
+          echo "exit=0"
+
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: publish
+        env:
+          MOONCAKES_TOKEN: ${{ secrets.MOONCAKES_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "step=publish"
+          echo "cmd=\"moon publish\""
+          [ -n "${MOONCAKES_TOKEN:-}" ] || {
+            echo "MOONCAKES_TOKEN is not available to this run"
+            echo "exit=1"
+            exit 1
+          }
+          set +e
+          moon publish
+          rc=$?
+          set -e
+          echo "exit=$rc"
+          [ "$rc" -eq 0 ] || exit "$rc"

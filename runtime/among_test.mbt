@@ -8,7 +8,7 @@
 /// Compare two strings from their end, the sort order of a backward among
 /// table: the first differing code unit counted from the end decides, and when
 /// one string is an exhausted suffix the shorter one sorts first.
-fn cmp_rev(a : String, b : String) -> Int {
+fn cmp_rev(a : String, b : String) -> Int32 {
   let mut i = a.length() - 1
   let mut j = b.length() - 1
   while i >= 0 && j >= 0 {
@@ -25,7 +25,7 @@ fn cmp_rev(a : String, b : String) -> Int {
 /// Build a backward among table from `(string, result)` rows: insertion-sort
 /// the rows by reverse order, then point each row's `substring_i` at the index
 /// of its longest proper suffix that is also a row (-1 when there is none).
-fn build_reverse_table(rows : Array[(String, Int)]) -> Array[@runtime.Among] {
+fn build_reverse_table(rows : Array[(String, Int32)]) -> Array[@runtime.Among] {
   let sorted = rows.copy()
   let mut k = 1
   while k < sorted.length() {
@@ -90,8 +90,8 @@ test "find_among agrees with linear reference on lexicographic table" {
     @runtime.Among::new("bcd", 6, 7),
   ]
   let words : Array[String] = [
-    "", "a", "b", "ab", "abc", "abcd", "abcde", "xabc", "bc", "bcd", "bcde",
-    "zzz", "abz", "bce", "ba", "abd",
+    "", "a", "b", "ab", "abc", "abcd", "abcde", "xabc", "bc", "bcd", "bcde", "zzz",
+    "abz", "bce", "ba", "abd",
   ]
   let mut checked = 0
   for w in words {
@@ -118,24 +118,50 @@ test "find_among agrees with linear reference on lexicographic table" {
 /// 3 prefixes (360 cases). Every case must agree on result code and cursor.
 test "find_among_b agrees with linear reference on reverse tables" {
   let t0 = build_reverse_table([
-    ("s", 1), ("ss", 2), ("sses", 3), ("es", 4), ("ies", 5),
+    ("s", 1),
+    ("ss", 2),
+    ("sses", 3),
+    ("es", 4),
+    ("ies", 5),
   ])
   let t1 = build_reverse_table([
-    ("ed", 1), ("eed", 2), ("ied", 3), ("ies", 4), ("s", 5),
+    ("ed", 1),
+    ("eed", 2),
+    ("ied", 3),
+    ("ies", 4),
+    ("s", 5),
   ])
   let t2 = build_reverse_table([
-    ("ing", 1), ("ings", 2), ("ed", 3), ("s", 4), ("ly", 5),
+    ("ing", 1),
+    ("ings", 2),
+    ("ed", 3),
+    ("s", 4),
+    ("ly", 5),
   ])
   let t3 = build_reverse_table([
-    ("ational", 1), ("ization", 2), ("ate", 3), ("icate", 4), ("al", 5),
+    ("ational", 1),
+    ("ization", 2),
+    ("ate", 3),
+    ("icate", 4),
+    ("al", 5),
     ("ation", 6),
   ])
   let t4 = build_reverse_table([
-    ("ness", 1), ("ousness", 2), ("ement", 3), ("ment", 4), ("ent", 5),
+    ("ness", 1),
+    ("ousness", 2),
+    ("ement", 3),
+    ("ment", 4),
+    ("ent", 5),
     ("s", 6),
   ])
   let t5 = build_reverse_table([
-    ("x", 1), ("ou", 2), ("iz", 3), ("bb", 4), ("ez", 5), ("s", 6), ("es", 7),
+    ("x", 1),
+    ("ou", 2),
+    ("iz", 3),
+    ("bb", 4),
+    ("ez", 5),
+    ("s", 6),
+    ("es", 7),
   ])
   let tables : Array[Array[@runtime.Among]] = [t0, t1, t2, t3, t4, t5]
   for ti, t in tables {
@@ -144,8 +170,8 @@ test "find_among_b agrees with linear reference on reverse tables" {
     }
   }
   let suffixes : Array[String] = [
-    "", "s", "ies", "sses", "ss", "ed", "eed", "ing", "bb", "iz", "ational",
-    "ization", "ousness", "ement", "ment", "al", "icate", "ness", "ou", "x",
+    "", "s", "ies", "sses", "ss", "ed", "eed", "ing", "bb", "iz", "ational", "ization",
+    "ousness", "ement", "ment", "al", "icate", "ness", "ou", "x",
   ]
   let mut checked = 0
   for ti, t in tables {

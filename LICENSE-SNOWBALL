@@ -1,0 +1,62 @@
+Copyright (c) 2001, Dr Martin Porter
+Copyright (c) 2004,2005, Richard Boulton
+Copyright (c) 2013, Yoshiki Shibukawa
+Copyright (c) 2006-2025, Olly Betts
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+  1. Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
+  2. Redistributions in binary form must reproduce the above copyright notice,
+     this list of conditions and the following disclaimer in the documentation
+     and/or other materials provided with the distribution.
+  3. Neither the name of the Snowball project nor the names of its contributors
+     may be used to endorse or promote products derived from this software
+     without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+This repository carries two licenses.
+
+- BSD-3-Clause covers all upstream-derived material: the Snowball algorithm and
+  runtime, every stemmer source generated or translated from upstream Snowball
+  output (for example english/english_gen.mbt, porter311/porter311_gen.mbt, and the
+  other <lang>/<lang>_gen.mbt files), and the vendored generated stemmers shipped
+  under tools/vendor/ — tools/vendor/py32/{arabic,dutch,english,french,german,
+  italian,portuguese,russian,spanish,turkish}_stemmer.py and
+  tools/vendor/snowballstemmer-3.1.1/porter_stemmer.py. Each vendored file is headed
+  "Generated from <lang>.sbl by Snowball 3.2.0/3.1.1"; the MoonBit sources
+  self-identify as translations of Snowball 3.2.0 output and the vendored Python
+  files are upstream compiler output. All of them are derivatives of the upstream
+  project rather than independently authored code. The 29 lines above are the
+  BSD-3-Clause text of the upstream Snowball project's COPYING file;
+  snowball/COPYING in the development tree is a verbatim copy of that upstream file
+  and is not shipped with this package.
+- MIT covers the hand-written MoonBit implementation and the hand-written tooling in
+  this repository: the runtime implementation and its public API, the language
+  registry, hand-written bindings and driver code, the hand-written scripts
+  (tools/translate.py, tools/check_gate.py, tools/d1check.py, tools/lang_inputs.py,
+  tools/audit_paths.py, tools/translate_all.py, tools/gen_all.sh,
+  tools/unpack_arabic.sh, and scripts/), and the tests. The full MIT text is in
+  LICENSE. The vendored files under tools/vendor/ are NOT MIT: they fall under the
+  BSD-3-Clause bullet above.
+- The module manifest (moon.mod) declares license = "MIT" for the package as a whole.
+  That manifest field does not override the BSD-3-Clause terms that apply to the
+  upstream-derived files listed above.
+
+Both licenses apply at the same time: redistributing this repository means honoring
+BSD-3-Clause for the upstream Snowball material (including the vendored generated
+stemmers under tools/vendor/) and MIT for this repository's hand-written MoonBit
+implementation and hand-written tooling.
