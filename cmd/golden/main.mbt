@@ -1288,10 +1288,12 @@ fn run_spec_boundary_cases(
   }
 
   // B-11: the first 1000 corpus lines of each language through ONE shared
-  // instance versus a FRESH instance per line.  §4.4 declares a single
-  // `same=true`, so the three languages fold into one aggregate line; the
-  // per-language lines report `differing=` and never reuse that token (the
-  // plan counts `grep -c 'same=true'` == 1).
+  // instance versus a FRESH instance per line.  §4.4 pins exactly one
+  // `case=<dutch-first-500-reuse> same=true` line (the dutch verdict, whose
+  // prefix is unique), so the three languages fold into one aggregate line;
+  // the per-language lines report `differing=` and this aggregate is the
+  // transcript's second `same=true` (nonlatin spec FR-17), not counted by
+  // the latin FR-14 pin.
   let heads : Array[Array[String]] = [ru_voc, ar_voc, tr_voc]
   let mut b11_diff = 0
   let mut b11_checked = 0

@@ -452,8 +452,11 @@ def check_latin_boundaries(path):
     """Pin the U3 spec §4.4 boundary transcript read from `path`.
 
     The transcript is the `moon run cmd/golden` stdout log.  What is pinned:
-    exactly one `boundary: latin failed=0` summary, exactly one `same=true`
-    line (the FR-17 dutch instance-reuse verdict) and no `same=false`, zero
+    exactly one `boundary: latin failed=0` summary, exactly one
+    `case=<dutch-first-500-reuse> same=true` line (the FR-17 dutch
+    instance-reuse verdict, anchored on its unique prefix: the nonlatin B-11
+    aggregate also prints `same=true`, latin spec FR-14 pins only the dutch
+    one) and no `same=false`, zero
     `ok=false` lines, and the Latin block as a contiguous 48-line window
     anchored at the unique B-01 line: B-01..B-16 exact and in spec order,
     then six languages x (empty, dash, Aargauer, Strasse), then six B-21
@@ -488,8 +491,9 @@ def check_latin_boundaries(path):
 
     judge("`boundary: latin failed=0` lines",
           sum(1 for l in lines if l == "boundary: latin failed=0"), 1)
-    judge("lines containing `same=true`",
-          sum(1 for l in lines if "same=true" in l), 1)
+    judge("`case=<dutch-first-500-reuse> same=true` lines",
+          sum(1 for l in lines if l.startswith("case=<dutch-first-500-reuse> ")
+              and "same=true" in l), 1)
     judge("lines containing `same=false`",
           sum(1 for l in lines if "same=false" in l), 0)
     judge("lines containing `ok=false`",
@@ -582,7 +586,8 @@ def main():
     ap.add_argument("--golden-log", default=None,
                     help="the `moon run cmd/golden` stdout log; when given, the "
                          "U3 §4.4 Latin boundary transcript is pinned (one "
-                         "`boundary: latin failed=0`, one `same=true`, no "
+                         "`boundary: latin failed=0`, one "
+                         "`case=<dutch-first-500-reuse> same=true`, no "
                          "`same=false`, the 16 B-01..B-16 exact lines, six each "
                          "of B-17..B-21, zero `ok=false`); a missing file is a "
                          "failure, not a skip")
