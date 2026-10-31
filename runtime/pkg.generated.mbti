@@ -12,13 +12,13 @@ pub fn eq_v(Env, String) -> Bool
 
 pub fn eq_v_b(Env, String) -> Bool
 
-pub fn find_among(Env, Array[Among]) -> Int
+pub fn find_among(Env, Array[Among]) -> Int32
 
-pub fn find_among_b(Env, Array[Among]) -> Int
+pub fn find_among_b(Env, Array[Among]) -> Int32
 
-pub fn find_among_b_linear(Env, Array[Among]) -> Int
+pub fn find_among_b_linear(Env, Array[Among]) -> Int32
 
-pub fn find_among_linear(Env, Array[Among]) -> Int
+pub fn find_among_linear(Env, Array[Among]) -> Int32
 
 pub fn get_current(Env) -> String
 
@@ -36,13 +36,13 @@ pub fn in_grouping_b(Env, String) -> Bool
 
 pub fn in_set(String, UInt16) -> Bool
 
-pub fn insert(Env, Int, Int, String) -> Unit
+pub fn insert(Env, Int32, Int32, String) -> Unit
 
 pub fn out_grouping(Env, String) -> Bool
 
 pub fn out_grouping_b(Env, String) -> Bool
 
-pub fn replace_s(Env, Int, Int, String) -> Int
+pub fn replace_s(Env, Int32, Int32, String) -> Int32
 
 pub fn set_current(Env, String) -> Unit
 
@@ -64,19 +64,19 @@ pub(all) suberror Lab {
 // Types and methods
 pub(all) struct Among {
   s : String
-  substring_i : Int
-  result : Int
+  substring_i : Int32
+  result : Int32
   cb : ((Env) -> Bool)?
 }
-pub fn Among::new(String, Int, Int, cb? : ((Env) -> Bool)?) -> Self
+pub fn Among::new(String, Int32, Int32, cb? : ((Env) -> Bool)?) -> Self
 
 pub(all) struct Env {
   mut current : String
-  mut cursor : Int
-  mut limit : Int
-  mut limit_backward : Int
-  mut bra : Int
-  mut ket : Int
+  mut cursor : Int32
+  mut limit : Int32
+  mut limit_backward : Int32
+  mut bra : Int32
+  mut ket : Int32
 }
 pub fn Env::new(String) -> Self
 pub fn Env::set_current(Self, String) -> Unit

@@ -16,12 +16,13 @@
 #              readme, license, repository, and the keywords+description pair —
 #              with name in the form <author>/<module>, that author equal to the
 #              `moon whoami` output, version matching ^0\.[0-9]+\.[0-9]+$, and
-#              the `moon publish --dry-run` log carrying
-#              `Dry run completed successfully` exactly once and zero
-#              `field is not set or empty` warnings.  Success is judged on the
-#              log string only: the dry-run exits non-zero even when it succeeds
-#              (255/127 on the reference toolchain), so its exit code is
-#              reported but never used as the verdict.
+#              the `moon publish --dry-run` log carrying either the reference
+#              toolchain's `Dry run completed successfully` line, or the newer
+#              toolchain's `Server status: 202 Accepted` line together with a
+#              zero exit status; zero `field is not set or empty` warnings in
+#              either case.  The old toolchain exits non-zero even on success
+#              (255/127), so its exit code is reported but never used as the
+#              verdict on its own.
 #              `moon whoami` needs a logged-in, credited account; an
 #              unauthenticated runner fails this check by design (a CI runner
 #              must inject the credential — see the release notes).
@@ -92,8 +93,9 @@
 #   - No timeout wraps the network steps (`moon whoami`, `moon publish
 #     --dry-run`); a hung registry blocks the gate until the caller's own CI
 #     timeout fires.
-#   - `metadata=` requires exactly one `Dry run completed successfully` line:
-#     zero is a registry/manifest failure, two would mean a merged log.
+#   - `metadata=` requires either exactly one legacy success line, or one
+#     `Server status: 202 Accepted` line with exit 0; zero is a
+#     registry/manifest failure, two would mean a merged log.
 
 set -u
 
@@ -261,23 +263,27 @@ run_metadata() {
         return 1
     fi
 
-    # 5. the dry-run log.  Its exit status is non-zero on success (255/127 on
-    # the reference toolchain), so only the log strings are asserted.
+    # 5. the dry-run log.  The reference toolchain exits non-zero even on
+    # success (255/127); the 0.1.20261028 toolchain exits 0 and drops the
+    # `Dry run completed successfully` detail.  Both success shapes are
+    # accepted; a non-zero exit with no legacy success line is a failure.
     dry_log=$LOG_DIR/preflight-dryrun.log
     note "metadata: running 'moon publish --dry-run' (log: $dry_log)"
     moon publish --dry-run > "$dry_log" 2>&1
     drc=$?
     n_ok=$(grep -c -- 'Dry run completed successfully' "$dry_log" 2>/dev/null)
     n_ok=${n_ok:-0}
+    n_202=$(grep -c -- 'Server status: 202 Accepted' "$dry_log" 2>/dev/null)
+    n_202=${n_202:-0}
     n_empty=$(grep -c -- 'field is not set or empty' "$dry_log" 2>/dev/null)
     n_empty=${n_empty:-0}
 
-    note "metadata: dry-run exit=$drc (non-zero success is expected; only the log string is judged)"
-    if [ "$n_ok" != "1" ]; then
-        note "metadata: dry-run log has $n_ok line(s) with 'Dry run completed successfully' (expected 1)"
+    note "metadata: dry-run exit=$drc (the verdict is the success line: legacy 'Dry run completed successfully' or 202 Accepted with exit 0)"
+    if [ "$n_ok" != "1" ] && ! { [ "$drc" = "0" ] && [ "$n_202" = "1" ]; }; then
+        note "metadata: dry-run log has $n_ok legacy success line(s) and $n_202 'Server status: 202 Accepted' line(s) with exit=$drc"
         # Quote the registry's own status line when the failure came from the
         # server rather than from the manifest: a transient outage is still a
-        # fail (the success string is the criterion), but the operator should
+        # fail (the success lines are the criterion), but the operator should
         # not go hunting in moon.mod for it.
         grep -- 'Server status:' "$dry_log" 2>/dev/null |
             head -n 3 | sed 's/^/metadata:   /' >&2
