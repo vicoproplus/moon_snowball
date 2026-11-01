@@ -242,6 +242,7 @@ CORPUS_LOG="$LOG_ROOT/T8-corpus.log"
 # never disagree about what a healthy run looks like.
 GOLDEN_LOG="$LOG_ROOT/T7-golden.log"
 GOLDEN_GATE_LOG="$LOG_ROOT/T7-gate.log"
+GOLDEN_BOUNDARY_LOG="$LOG_ROOT/T7-boundary.log"
 GOLDEN_GATE="$MODULE_ROOT/scripts/gate.sh"
 UNPACK_SCRIPT="$MODULE_ROOT/tools/unpack_arabic.sh"
 UNPACK_DST="$MODULE_ROOT/build/data/arabic"
@@ -2189,6 +2190,23 @@ stage_golden() {
     done <"$GOLDEN_GATE_LOG"
     if [ "$_g_gate_rc" -ne 0 ]; then
         log_err "golden failed: scripts/gate.sh exited $_g_gate_rc (driver exit=$_g_rc)"
+        log_err "stage=golden exit=$EXIT_GOLDEN"
+        return "$EXIT_GOLDEN"
+    fi
+
+    # U3 §4.4: pin the boundary transcript with the compile gate's BOUNDARY
+    # assertions now that the driver log exists — the check stage runs before
+    # golden, so this is the only point where the full transcript can be read.
+    # A missing or failing assertion is fail-closed for the stage.
+    : > "$GOLDEN_BOUNDARY_LOG" 2>/dev/null || true
+    ( cd "$MODULE_ROOT" && "$PYTHON_BIN" tools/check_gate.py \
+        --golden-log "$GOLDEN_LOG" ) >"$GOLDEN_BOUNDARY_LOG" 2>&1
+    _g_boundary_rc=$?
+    while IFS= read -r _g_bline; do
+        log_line "boundary: $_g_bline"
+    done <"$GOLDEN_BOUNDARY_LOG"
+    if [ "$_g_boundary_rc" -ne 0 ]; then
+        log_err "golden failed: tools/check_gate.py --golden-log exited $_g_boundary_rc"
         log_err "stage=golden exit=$EXIT_GOLDEN"
         return "$EXIT_GOLDEN"
     fi

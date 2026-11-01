@@ -604,25 +604,25 @@ def main():
     if not rels:
         rels = EXPECTED_RELS
 
+    # The mbti and dialect sections run only when their log is requested:
+    # a bare `--golden-log` invocation (the golden stage pins the boundary
+    # transcript there) must not duplicate the check stage's work or drop
+    # T6-*.log files in the caller's cwd.
     if args.mbti_log:
         check_mbti(root, pathlib.Path(args.mbti_log))
-    else:
-        check_mbti(root, pathlib.Path("T6-mbti.log"))
 
     if args.dialect_log:
         dialect_log = pathlib.Path(args.dialect_log)
-    else:
-        dialect_log = pathlib.Path("T6-dialect.log")
-    # The D-1 rows and the retrieval rows share one log, in that order.
-    d1_only = pathlib.Path(str(dialect_log) + ".d1")
-    check_d1(root, d1_only)
-    d1_text = d1_only.read_text(encoding="utf-8")
-    d1_only.unlink()
-    red_only = pathlib.Path(str(dialect_log) + ".red")
-    check_red_lines(root, rels, red_only)
-    red_text = red_only.read_text(encoding="utf-8")
-    red_only.unlink()
-    dialect_log.write_text(d1_text + red_text, encoding="utf-8")
+        # The D-1 rows and the retrieval rows share one log, in that order.
+        d1_only = pathlib.Path(str(dialect_log) + ".d1")
+        check_d1(root, d1_only)
+        d1_text = d1_only.read_text(encoding="utf-8")
+        d1_only.unlink()
+        red_only = pathlib.Path(str(dialect_log) + ".red")
+        check_red_lines(root, rels, red_only)
+        red_text = red_only.read_text(encoding="utf-8")
+        red_only.unlink()
+        dialect_log.write_text(d1_text + red_text, encoding="utf-8")
 
     # U3 spec §4.4: the boundary transcript, pinned only when asked for.  A
     # given-but-missing path has already registered a failure in FAILS.
