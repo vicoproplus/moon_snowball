@@ -22,6 +22,7 @@ Facts this file relies on (all verified on the ten 3.2.0 files):
     (dutch `I_p1`/`I_p2`), which stay class attributes -> MoonBit fields.
 """
 import ast
+import re
 import sys
 
 UNIT = {"slice_from", "slice_del", "insert", "set_current"}
@@ -83,21 +84,33 @@ def is_current_subscript(n):
     return (isinstance(n, ast.Subscript) and isinstance(n.value, ast.Attribute)
             and n.value.attr == "current")
 
-
 class Translator:
-    def __init__(self, tree, struct, rt):
+
+    def __init__(self, tree, struct, rt, version=None):
         self.t = tree
         self.struct = struct
         self.rt = rt            # e.g. "rt"
+        self.version = version  # Snowball version string (e.g. "3.1.1") or None
         self.cls = None
         self.methods = set()
         self.consts = {}        # class-level a_N / as_N / g_* / I_*
         self.fields = {}        # self.<attr> that survive localisation
         self.locals = {}        # routine -> {local: MoonBit type}
         self.raising = set()
+        self.routine_ids = {}     # __r_name -> 1-based id (routine-id trial)
+        self.among_routines = {}  # table const name -> set of routine names
+        self.among_dir = {}       # table const name -> "fwd" | "bwd"
+        self.among_raise = {}     # table const name -> Bool (a routine may raise)
+        self.fn_tables = {}       # routine -> set of among tables it queries
 
     # -------------------------------------------------------------- analysis
     def analyse(self):
+        for node in self.t.body:
+            if (isinstance(node, ast.Assign)
+                    and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Name)
+                    and re.match(r"^a_[0-9]+$", node.targets[0].id)):
+                raise Unsupported("module-level-among-table", node.lineno)
         for node in self.t.body:
             if isinstance(node, ast.ClassDef) and node.bases and \
                     isinstance(node.bases[0], ast.Name) and node.bases[0].id == "BaseStemmer":
@@ -142,6 +155,23 @@ class Translator:
                     elif nty and nty != loc[nm]:
                         raise Unsupported("local-type-conflict", getattr(val, "lineno", node.lineno))
             self.locals[item.name] = loc
+        # Routine-id trial: scan among-table constants for 4-arg Among calls,
+        # assign a stable 1-based routine id per referenced routine name.
+        for item in self.cls.body:
+            if not isinstance(item, ast.Assign):
+                continue
+            tgt = item.targets[0]
+            if not (isinstance(tgt, ast.Name) and tgt.id.startswith("a_")):
+                continue
+            for el in ast.walk(item.value):
+                if isinstance(el, ast.Call) and isinstance(el.func, ast.Name) \
+                        and el.func.id == "Among" and len(el.args) >= 4:
+                    f = el.args[3]
+                    if not isinstance(f, ast.Name):
+                        raise Unsupported("among-arg", el.lineno)
+                    if f.id not in self.routine_ids:
+                        self.routine_ids[f.id] = len(self.routine_ids) + 1
+                    self.among_routines.setdefault(tgt.id, set()).add(f.id)
         # error-signature closure: a routine needs `raise Lab` if it raises or
         # calls a routine that does.
         direct = {f.name: any(isinstance(n, ast.Raise) for n in ast.walk(f))
@@ -162,6 +192,29 @@ class Translator:
                 if k not in self.raising and callees & self.raising:
                     self.raising.add(k)
                     changed = True
+        # Routine-id trial: a table's dispatcher raises when one of its
+        # routines raises; a routine that queries such a table inherits it.
+        for tbl, names in self.among_routines.items():
+            self.among_raise[tbl] = any(
+                "__r_" + n[4:] in self.raising or n in self.raising
+                for n in names)
+        for f in self.cls.body:
+            if not isinstance(f, ast.FunctionDef):
+                continue
+            tbls = {n.args[0].attr for n in ast.walk(f)
+                    if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                    and isinstance(n.func.value, ast.Name) and n.func.value.id == "self"
+                    and n.func.attr in ("find_among", "find_among_b")
+                    and n.args and isinstance(n.args[0], ast.Attribute)
+                    and isinstance(n.args[0].value, ast.Name)}
+            self.fn_tables[f.name] = tbls
+        changed = True
+        while changed:
+            changed = False
+            for k, tbls in self.fn_tables.items():
+                if k not in self.raising and any(self.among_raise.get(t) for t in tbls):
+                    self.raising.add(k)
+        self.raising |= {mangle(n) for n in list(self.raising)}
 
     def infer(self, val):
         if isinstance(val, ast.Constant):
@@ -274,13 +327,25 @@ class Translator:
             a = f.attr
             if a in self.methods:
                 return mangle(a) + "(p" + "".join(", " + self.e(x) for x in n.args) + ")"
+            if a in ("find_among", "find_among_b"):
+                tbl = None
+                if n.args and isinstance(n.args[0], ast.Attribute) \
+                        and isinstance(n.args[0].value, ast.Name):
+                    tbl = n.args[0].attr
+                if tbl in self.among_routines:
+                    d = "fwd" if a == "find_among" else "bwd"
+                    self.among_dir.setdefault(tbl, d)
+                    if self.among_dir[tbl] != d:
+                        raise Unsupported("among-mixed-dir", n.lineno)
+                    return f"among_{mangle(tbl)}(p)"
+                return self.rt_call(a, [self.e(x) for x in n.args])
             if a in RUNTIME:
                 return self.rt_call(a, [self.e(x) for x in n.args])
             raise Unsupported("method." + a, n.lineno)
         if isinstance(f, ast.Name) and f.id == "len":
             return f"({self.e(n.args[0])}).length()"
         if isinstance(f, ast.Name) and f.id == "Among":
-            if len(n.args) >= 4 or n.keywords:
+            if n.keywords:
                 raise Unsupported("among-callback", n.lineno)
             args = []
             for a in n.args:
@@ -288,6 +353,8 @@ class Translator:
                     args.append(str_lit(a.value) if isinstance(a.value, str) else str(a.value))
                 elif isinstance(a, ast.UnaryOp) and isinstance(a.op, ast.USub):
                     args.append("-" + str(a.operand.value))
+                elif isinstance(a, ast.Name) and a.id.startswith("__r_"):
+                    args.append(f"routine_id={self.routine_ids[a.id]}")
                 else:
                     raise Unsupported("among-arg", a.lineno)
             return f"@{self.rt}.Among::new({', '.join(args)})"
@@ -401,12 +468,7 @@ class Translator:
         if not (isinstance(el, ast.Call) and isinstance(el.func, ast.Name)
                 and el.func.id == "Among"):
             raise Unsupported("call", getattr(el, "lineno", 0))
-        if len(el.args) >= 4 or el.keywords:
-            # Among(s, substring_i, result, __r_foo): the callback would have
-            # to capture the stemmer struct at module-level table initialisation,
-            # which MoonBit rejects ([4021] p is unbound).  Refuse, never guess.
-            # The keyword form (`cb=__r_foo`) slips the positional count, so it
-            # is refused too.
+        if el.keywords:
             raise Unsupported("among-callback", el.lineno)
         args = []
         for a in el.args:
@@ -414,6 +476,8 @@ class Translator:
                 args.append(str_lit(a.value) if isinstance(a.value, str) else str(a.value))
             elif isinstance(a, ast.UnaryOp) and isinstance(a.op, ast.USub):
                 args.append("-" + str(a.operand.value))
+            elif isinstance(a, ast.Name) and a.id.startswith("__r_"):
+                args.append(f"routine_id={self.routine_ids[a.id]}")
             else:
                 raise Unsupported("among-arg", a.lineno)
         return f"@{self.rt}.Among::new({', '.join(args)})"
@@ -446,8 +510,18 @@ class Translator:
 
     def run(self):
         self.analyse()
-        out = ["// Generated by translate.py from Snowball 3.2.0 -python output.",
-               "// Structural translation; do not edit by hand.", ""]
+        if self.version:
+            out = [f"// Generated by translate.py from Snowball {self.version} -python output.",
+                   "// Structural translation; do not edit by hand."]
+            if "stem_inner" not in self.raising:
+                out.append("// no-lab: stem_word never raises (contract mandates an unconditional `raise` clause)")
+            out.append("")
+        else:
+            out = ["// Generated by translate.py from Snowball -python output.",
+                   "// Structural translation; do not edit by hand."]
+            if "stem_inner" not in self.raising:
+                out.append("// no-lab: stem_word never raises (contract mandates an unconditional `raise` clause)")
+            out.append("")
         out += ["///|", f"pub struct {self.struct} {{", f"  e : @{self.rt}.Env"]
         for a, default in self.fields.items():
             ty = "Bool" if isinstance(default, ast.Constant) and isinstance(default.value, bool) else "Int"
@@ -460,8 +534,8 @@ class Translator:
             else:
                 init.append(f"{mangle(a)}: 0")
         out += ["  { " + ", ".join(init) + " }", "}", ""]
-        out += ["///|",
-                f"pub fn stem_word(p : {self.struct}, word : String) -> String raise @{self.rt}.Lab {{",
+        sw_sig = f"pub fn stem_word(p : {self.struct}, word : String) -> String raise @{self.rt}.Lab"
+        out += ["///|", sw_sig + " {",
                 f"  @{self.rt}.set_current(p.e, word)",
                 "  let _ = stem_inner(p)",
                 f"  @{self.rt}.get_current(p.e)",
@@ -473,6 +547,7 @@ class Translator:
         for item in self.cls.body:
             if isinstance(item, ast.FunctionDef):
                 out += self.emit_routine(item)
+        out += self.emit_among_wrappers()
         return "\n".join(out) + "\n"
 
     def emit_routine(self, fn):
@@ -489,11 +564,49 @@ class Translator:
         return out
 
 
+    def emit_among_wrappers(self):
+        """One dispatcher per among table that carries routines.
+
+        Mirrors snowball's C generator (generator_c.c:1590-1720): find_among
+        reports *which* entry needs its routine (here: -(index+1)); the caller
+        runs the routine and, if it signals f, resumes the suffix chain. No
+        closure and no instance capture at table-init time.
+        """
+        out = []
+        for tbl in sorted(self.among_routines):
+            routines = sorted(self.among_routines[tbl])
+            fwd = self.among_dir[tbl] == "fwd"
+            arith = "+" if fwd else "-"
+            entry = "find_among_fwd_id" if fwd else "find_among_bwd_id"
+            resume = "find_among_resume_fwd" if fwd else "find_among_resume_bwd"
+            sig = f"fn among_{mangle(tbl)}(p : {self.struct}) -> Int32"
+            if self.among_raise.get(tbl):
+                sig += f" raise @{self.rt}.Lab"
+            out += ["///|", sig + " {",
+                    "  let e = p.e", "  let c0 = e.cursor",
+                    f"  let mut r = @{self.rt}.{entry}(e, {mangle(tbl)})",
+                    "  while r >= 1000000 {", "    let at = r - 1000000",
+                    f"    let ok = match {mangle(tbl)}[at].routine_id {{"]
+            for nm in routines:
+                out.append(f"      {self.routine_ids[nm]} => {mangle(nm)}(p)")
+            out += ["      _ => false", "    }", "    if ok {",
+                    f"      e.cursor = c0 {arith} {mangle(tbl)}[at].s.length()",
+                    f"      return {mangle(tbl)}[at].result", "    }",
+                    f"    r = @{self.rt}.{resume}(e, {mangle(tbl)}, c0, at)",
+                    "  }", "  r", "}", ""]
+        return out
+
+
 def main():
     src, dst, struct, rt = sys.argv[1:5]
-    tree = ast.parse(open(src, encoding="utf-8").read())
+    raw = open(src, encoding="utf-8").read()
+    tree = ast.parse(raw)
+    version = None
+    m = re.search(r"Snowball (\d+\.\d+\.\d+)", raw.splitlines()[0] if raw.splitlines() else "")
+    if m:
+        version = m.group(1)
     try:
-        txt = Translator(tree, struct, rt).run()
+        txt = Translator(tree, struct, rt, version=version).run()
     except Unsupported as exc:
         print(f"{src}:{exc.lineno}: unsupported: {exc.kind}", file=sys.stderr)
         return 2

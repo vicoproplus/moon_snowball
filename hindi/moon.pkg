@@ -1,0 +1,10 @@
+import {
+  "vicoproplus/moon_snowball/runtime" @rt,
+}
+
+// `stem_word` carries a contract-mandated unconditional `raise @runtime.Lab`,
+// but this algorithm never raises: the declared error type is intentionally
+// unused, so MoonBit's `unused_error_type` warning is suppressed for this
+// package only.
+
+warnings = "-unused_error_type"

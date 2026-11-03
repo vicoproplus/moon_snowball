@@ -30,34 +30,39 @@
 # .planning/logs/u2/gen1 and .planning/logs/u2/gen2 — and then proves the
 # two claims the pipeline is allowed to make:
 #
-#     generated 11/11          gen1 and gen2 are byte-identical (the eleven
-#                              upstream languages, porter included)
+#     generated 36/36          gen1 and gen2 are byte-identical (all 36
+#                              upstream languages, dutch_porter included;
+#                              porter311 is the separate control input and
+#                              is never generated)
 #     py32 covered 10/10 SAME  the ten vendored py32 stemmers are unchanged
 #
-# porter has no vendored py32 counterpart: its baseline is gen1 == gen2
-# only, and that is what the pipeline states.
+# `$PY32_LANGS` is a ten-file CROSS-CHECK SUBSET, not the generation
+# population: generation covers all 36 from `$PY_PKG_ROOT_ABS`, and `porter`
+# is preserved at 3.2.0 (the 3.1.1 PyPI copy is the same algorithm as
+# porter311, so it has no vendored counterpart to compare against).
 #
 # FR-04 degrade (no WSL): when the host is not WSL and no working `wsl`
 # exists, the upstream compiler cannot run at all.  The generate stage then
-# takes its vendored branch: the ten tools/vendor/py32 stemmers are the
-# generation result (they are byte-identical to the compiler output), the
-# vendored porter311 input is verified exactly as [2b] does, and porter
-# (the 3.2.0 algorithm, which has no vendored counterpart) is reused from
-# out_root when a previous WSL run left it there.  With no cached porter the
-# branch refuses (exit 6) instead of shipping a partial set, and an
-# incomplete vendored directory is refused the same way (FE3).  The first
-# line of such a run is
+# takes its vendored branch: all 36 inputs are materialised from
+# `$PY_PKG_ROOT_ABS` (the ten tools/vendor/py32 stemmers where a 3.2.0
+# counterpart exists, the 3.1.1 PyPI sources otherwise), except `porter`,
+# whose committed 3.2.0 artifact is preserved instead of being overwritten
+# by the 3.1.1 copy.  A missing vendored file refuses (exit 6) instead of
+# shipping a partial set, and an incomplete vendored directory is refused
+# the same way (FE3).  The vendored porter311 control input is verified
+# exactly as [2b] does.  The first line of such a run is
 #     generate=skipped reason=no-wsl using=vendored
 # followed by the vendored directory's absolute path; the wslpath probe is
 # reported as skipped, and everything after generate is unchanged.
 #
-# [2b] vendored-in (Task 10): the twelfth registered input, porter311, is
+# [2b] vendored-in (Task 10): porter311 is the registered control input (the
+# 37th gate row: 36 registry languages plus this control row), and it is
 # never generated.  Its input is the vendored snowballstemmer-3.1.1
 # porter_stemmer.py, taken as-is, so the stage only checks that the file
 # exists and that its md5 still equals the registered value; it logs
 # `stage=generate lang=porter311 source=vendored-3.1.1 md5=<value>` and no
 # command line (there is no upstream command).  The generation counts above
-# stay 11/11 + 10/10; the vendored file is a separate 1/1 claim.
+# are unaffected; the vendored file is a separate 1/1 claim.
 #
 # Log: .planning/logs/u2/T2-entry.log — one field per line.  The field
 #     vocabulary is stage=, lang=, file=, line=, exit=, elapsed=, cmd=, the
@@ -88,8 +93,10 @@
 # baselines in T5-lines-a.txt / T5-lines-b.txt.
 #
 # The unpack stage (Task 8) resolves the corpus root, reuses it when the
-# eleven delivery inputs are already complete (`corpus=reused`, nothing is
-# cloned), and otherwise fetches it with a partial clone + sparse-checkout.
+# delivery inputs are already complete (`corpus=reused`, nothing is cloned;
+# `$CORPUS_LANGS` holds 35 mandatory entries and `$CORPUS_OPTIONAL` adds
+# `dutch_porter` as the 36th, whose absence is recorded but never fatal),
+# and otherwise fetches it with a partial clone + sparse-checkout.
 # It then snapshots build/data/arabic and hands the decompression to
 # tools/unpack_arabic.sh, which verifies an existing artifact by line count
 # AND content hash rather than trusting non-emptiness.  Its evidence is in
@@ -114,10 +121,10 @@
 #        git is missing, the clone failed, or the arabic artifact did not
 #        verify)
 #    10  the check stage failed (moon check non-zero or not success, a
-#        non-zero error/warning count, the 15-package assertion, moon info
+#        non-zero error/warning count, the 40-package assertion, moon info
 #        failing, a `.mbti` count, a D-1 verdict, or a dialect retrieval hit)
 #    11  the golden stage failed (a corpus file is missing, a voc/output line
-#        count differs, a per-line mismatch, a row count other than 12, a
+#        count differs, a per-line mismatch, a row count other than 37, a
 #        `checked` value other than the declared one, or a non-zero driver
 #        exit - the tri-state gate scripts/gate.sh decides)
 #     other  the exit code of the first failing stage.  The run is fail-fast:
@@ -247,10 +254,13 @@ GOLDEN_GATE="$MODULE_ROOT/scripts/gate.sh"
 UNPACK_SCRIPT="$MODULE_ROOT/tools/unpack_arabic.sh"
 UNPACK_DST="$MODULE_ROOT/build/data/arabic"
 
-# The eleven delivery inputs (brief Step 0c).  dutch_porter is optional: it is
-# not a delivered stemmer (design NG-08), so its absence is recorded, never
-# fatal.  arabic is the only language allowed to ship gzipped.
-CORPUS_LANGS="english porter french german spanish italian portuguese dutch russian arabic turkish"
+# The delivery inputs (brief Step 0c): 35 mandatory entries below, plus
+# dutch_porter as the 36th in $CORPUS_OPTIONAL.  dutch_porter is optional: it
+# is not a delivered stemmer (design NG-08), so its absence is recorded,
+# never fatal.  earlymodernenglish and ukrainian are deferred (DEL-1/DEL-2:
+# 3.2.0-only algorithms with no 3.1.1 source).  arabic is the only language
+# allowed to ship gzipped.
+CORPUS_LANGS="arabic armenian basque catalan czech danish dutch english esperanto estonian finnish french german greek hindi hungarian indonesian irish italian lithuanian nepali norwegian persian polish porter portuguese romanian russian serbian sesotho spanish swedish tamil turkish yiddish"
 CORPUS_OPTIONAL="dutch_porter"
 CORPUS_URL="${SNOWBALL_CORPUS_URL:-https://github.com/snowballstem/snowball-data}"
 
@@ -264,19 +274,21 @@ GEN1_ROOT="$LOG_ROOT/gen1"
 GEN2_ROOT="$LOG_ROOT/gen2"
 SNAPSHOT_BASE="${SNOWBALL_SNAPSHOT_ROOT:-$LOG_ROOT/snapshot}"
 
-# The eleven upstream languages (porter included) and the ten of them that
-# have a vendored py32 counterpart under tools/vendor/py32/.
-GEN_LANGS="arabic dutch english french german italian porter portuguese russian spanish turkish"
+# The 36 upstream languages (dutch_porter included) and the ten of them that
+# have a vendored py32 counterpart under tools/vendor/py32/ ($PY32_LANGS is a
+# cross-check subset, not the generation population).
+GEN_LANGS="arabic armenian basque catalan czech danish dutch dutch_porter english esperanto estonian finnish french german greek hindi hungarian indonesian irish italian lithuanian nepali norwegian persian polish porter portuguese romanian russian serbian sesotho spanish swedish tamil turkish yiddish"
 PY32_LANGS="arabic dutch english french german italian portuguese russian spanish turkish"
 
 # The translate stage's inputs and the module name written into each
-# <lang>/moon.pkg import.  The input list is the eleven deliverables (the
-# same eleven the generate stage produces; porter311 is not a deliverable),
-# and the module name is read from moon.mod, never hard-coded.
+# <lang>/moon.pkg import.  The input list is the 36 deliverables (the same 36
+# the generate stage produces; porter311 is not a deliverable), and the module
+# name is read from moon.mod, never hard-coded.
 TR_LANGS="$GEN_LANGS"
 
-# The twelfth registered input: porter311.  It is not a deliverable and not
-# in lang_registry.mbt, and it never reaches the upstream compiler — [2b]
+# The porter311 control input: registered as the 37th gate row (36 registry
+# languages + this control row).  It is not a deliverable and not in
+# lang_registry.mbt, and it never reaches the upstream compiler — [2b]
 # takes the vendored snowballstemmer-3.1.1 Python as-is.  The registered md5
 # is the contract value (shared-interface §3.4); a different value is fatal,
 # and the pipeline never rebuilds the file itself (that is U1-a's copy
@@ -285,8 +297,26 @@ TR_CONTROL_LANGS="porter311"
 VENDORED_PORTER311_REL="snowballstemmer-3.1.1/porter_stemmer.py"
 VENDORED_PORTER311_MD5="50a9ce301dc157b611c8d3272eab4b28"
 
-# The fmt stage's inputs: the same eleven deliverable packages the translate
-# stage writes, plus the porter311 control package (12th gate row).  The
+# `porter`'s provenance is 3.2.0 (the upstream compiler's own porter.sbl
+# algorithm, a deliverable), while porter311 is the 3.1.1 PyPI control sample;
+# contract §3.4 keeps the two shapes apart on purpose.  The no-WSL vendored
+# branch has no 3.2.0 source for `porter` (tools/vendor/py32/ carries only the
+# ten PY32_LANGS), so it PRESERVES the committed 3.2.0 artifact instead of
+# overwriting it with the 3.1.1 PyPI copy — which would silently turn porter
+# into a second porter311 (538 -> 570 lines, a 5.9% move that is under the
+# drift tolerance and so invisible to the drift check).
+PRESERVED_PORTER_LANG="porter"
+PRESERVED_PORTER_VERSION="3.2.0"
+PYPI_VERSION="3.1.1"
+
+# The 3.1.1 PyPI sources for every language, used by the no-WSL vendored
+# branch so all 36 generate-stage inputs exist without an upstream compiler.
+# Never hardcoded: SNOWBALL_PY_PKG_ROOT overrides, the default is
+# module-relative (Global Constraint 6).
+PY_PKG_ROOT_ABS="${SNOWBALL_PY_PKG_ROOT:-$MODULE_ROOT/.planning/data/py-pkg/snowballstemmer}"
+
+# The fmt stage's inputs: the same 36 deliverable packages the translate
+# stage writes, plus the porter311 control package (37th gate row).  The
 # formatter is named package by package, so the module root, runtime/ and
 # cmd/golden/ are never rewritten by this stage.
 FMT_LANGS="$GEN_LANGS"
@@ -337,6 +367,8 @@ emit_header() {
     emit_root data_root "$DATA_ROOT_ABS" "$DATA_SRC"
     emit_root out_root "$OUT_ROOT_ABS" "$OUT_SRC"
     emit_root vendor_root "$VENDOR_ROOT_ABS" "$VENDOR_SRC"
+if [ -n "${SNOWBALL_PY_PKG_ROOT:-}" ]; then _ppsrc=env; else _ppsrc=default; fi
+emit_root py_pkg_root "$PY_PKG_ROOT_ABS" "$_ppsrc"
     emit_root sb_root "$SB_ROOT_ABS" "$SB_SRC"
 }
 
@@ -493,20 +525,47 @@ usage() {
 
 # resolve_python — the ONE python resolver, shared by `--audit-paths` and the
 # toolchain preflight so the two can never disagree about the same PATH.
-# `python` is preferred, `python3` is accepted; whichever resolves is printed
-# and becomes the logged `python=<name>`.  Nothing else is consulted: the
-# Windows `py` launcher may register a 2.x interpreter, and a second resolver
-# for the same question is how a run and the audit ended up with different
-# verdicts.  Returns 1 when neither name resolves.
+#
+# A candidate is accepted only if it RUNS.  `command -v` alone accepts the
+# Windows Store `python` stub, which resolves on PATH yet exits 49 with no
+# output, so every subprocess launched through it dies silently while the run
+# log still claims a python was found.
+#
+# Preference order: SNOWBALL_PYTHON (explicit override) > py > python3 >
+# python.  The Windows `py` launcher comes first because on this host it is
+# what resolves to a real interpreter.  Each candidate is probed by actually
+# starting an interpreter (`-c`) and must exit 0 with non-empty output; a `-V`
+# probe is not enough because the `py` launcher answers it without resolving a
+# runtime.  The winning interpreter's absolute path (`sys.executable`) is
+# returned instead of the launcher name, so later invocations skip the
+# launcher.  A rejected candidate is reported on stderr so the transcript
+# shows why the winner won.  Returns 1 when nothing passes, and the caller
+# turns that into `python not found` (FR-15) — there is no fallback
+# interpreter.
 resolve_python() {
-    if command -v python >/dev/null 2>&1; then
-        printf '%s\n' python
-        return 0
-    fi
-    if command -v python3 >/dev/null 2>&1; then
-        printf '%s\n' python3
-        return 0
-    fi
+    for _rp_cand in "${SNOWBALL_PYTHON:-}" py python3 python; do
+        [ -n "$_rp_cand" ] || continue
+        command -v "$_rp_cand" >/dev/null 2>&1 || continue
+        # Probe by actually starting an interpreter.  `-V` is answered by the
+        # Windows `py` launcher without resolving a runtime, yet the very same
+        # launcher exits 103 ("No suitable Python runtime found") when asked to
+        # run a script whose shebang names `python3` — so a `-V` probe passes a
+        # candidate that cannot execute anything.
+        _rp_out=$("$_rp_cand" -c 'import sys; sys.stdout.write("ok")' 2>/dev/null </dev/null)
+        _rp_rc=$?
+        if [ "$_rp_rc" -eq 0 ] && [ -n "$_rp_out" ]; then
+            # Hand back the concrete interpreter path, not the launcher name:
+            # every later invocation goes to the resolved binary directly.
+            _rp_exe=$("$_rp_cand" -c 'import sys; sys.stdout.write(sys.executable)' 2>/dev/null </dev/null)
+            if [ -n "$_rp_exe" ]; then
+                printf '%s\n' "$_rp_exe"
+            else
+                printf '%s\n' "$_rp_cand"
+            fi
+            return 0
+        fi
+        printf 'python_candidate=%s rejected=exit%s\n' "$_rp_cand" "$_rp_rc" >&2
+    done
     return 1
 }
 
@@ -697,6 +756,9 @@ GENERATE_MODE=upstream
 if [ "$HOST" != wsl ]; then
     if ! command -v wsl >/dev/null 2>&1 || ! wsl -l -v >/dev/null 2>&1 </dev/null; then
         GENERATE_MODE=vendored
+    elif ! wsl -e true >/dev/null 2>&1 </dev/null; then
+        # Distro registered but VM cannot start (HCS_E_SERVICE_NOT_AVAILABLE).
+        GENERATE_MODE=vendored
     fi
 fi
 
@@ -797,13 +859,8 @@ esac
 # emitted only when the generate stage is part of this run's selection.
 # ---------------------------------------------------------------------------
 if [ "$GENERATE_MODE" = vendored ]; then
-    for _dn_stage in $RUN_STAGES; do
-        if [ "$_dn_stage" = generate ]; then
-            log_line "generate=skipped reason=no-wsl using=vendored"
-            log_line "vendored_dir=$VENDOR_ROOT_ABS"
-            break
-        fi
-    done
+    log_line "generate=skipped reason=no-wsl using=vendored"
+    log_line "vendored_dir=$VENDOR_ROOT_ABS"
 fi
 
 # ---------------------------------------------------------------------------
@@ -984,14 +1041,16 @@ stage_unpack() {
     #
     # Step 0a: resolve the corpus root (DATA_ROOT_ABS, already resolved as
     #          flag > SNOWBALL_DATA_ROOT > module-relative default) and check
-    #          the eleven delivery inputs BEFORE anything is fetched.  A
-    #          complete corpus is used as-is: `corpus=reused`, nothing is
-    #          cloned, whatever the source of the root.
+    #          the 35 mandatory delivery inputs in $CORPUS_LANGS BEFORE
+    #          anything is fetched (dutch_porter is the optional 36th, checked
+    #          separately in Step 0c).  A complete corpus is used as-is:
+    #          `corpus=reused`, nothing is cloned, whatever the source of the
+    #          root.
     # Step 0b: only when an input is missing, fetch with the two-stage form
     #          (partial clone + sparse-checkout) that is the only shape that
     #          worked on this network; git < 2.19 (no --filter=blob:none)
     #          degrades to a plain --depth 1 clone.
-    # Step 0c: assert the eleven inputs again (hard: any missing is fatal) and
+    # Step 0c: assert those inputs again (hard: any missing is fatal) and
     #          record dutch_porter, which is optional and never fatal.
     # Step 0d: a failed fetch exits non-zero with `corpus-clone-failed` on
     #          stderr and names SNOWBALL_DATA_ROOT as the escape hatch.  It
@@ -1020,10 +1079,10 @@ stage_unpack() {
         up_log "$*"
     }
 
-    # corpus_complete — every delivery input has a voc and an output side.
-    # Only arabic may be gzipped: for the other ten the gzipped name is not
-    # accepted, so a plain-looking root with a stray .gz cannot pass as
-    # complete.
+    # corpus_complete — every mandatory delivery input in $CORPUS_LANGS has a
+    # voc and an output side.  Only arabic may be gzipped: for the other 34
+    # the gzipped name is not accepted, so a plain-looking root with a stray
+    # .gz cannot pass as complete.
     corpus_complete() {
         for _cc_lang in $CORPUS_LANGS; do
             if [ "$_cc_lang" = arabic ]; then
@@ -1097,7 +1156,7 @@ stage_unpack() {
         fi
 
         # The sparse set is re-entrant: re-running the stage resumes it.
-        if ! ( cd "$DATA_ROOT_ABS" && git sparse-checkout set english porter french german spanish italian portuguese dutch dutch_porter russian arabic turkish ) >>"$CORPUS_LOG" 2>&1; then
+        if ! ( cd "$DATA_ROOT_ABS" && git sparse-checkout set arabic armenian basque catalan czech danish dutch dutch_porter english esperanto estonian finnish french german greek hindi hungarian indonesian irish italian lithuanian nepali norwegian persian polish porter portuguese romanian russian serbian sesotho spanish swedish tamil turkish yiddish ) >>"$CORPUS_LOG" 2>&1; then
             up_fail "corpus-clone-failed: git sparse-checkout set failed in $DATA_ROOT_ABS; re-run the stage (it is re-entrant) or set SNOWBALL_DATA_ROOT to an existing corpus copy"
             return "$EXIT_UNPACK"
         fi
@@ -1123,7 +1182,7 @@ stage_unpack() {
         up_fail "MISSING corpus after fetch:$_up_missing (root=$DATA_ROOT_ABS); set SNOWBALL_DATA_ROOT to an existing corpus copy"
         return "$EXIT_UNPACK"
     fi
-    up_emit "corpus_complete 11/11 root=$DATA_ROOT_ABS"
+    up_emit "corpus_complete $(set -- $CORPUS_LANGS; echo $#)/$(set -- $CORPUS_LANGS; echo $#) root=$DATA_ROOT_ABS"
     if [ -d "$DATA_ROOT_ABS/$CORPUS_OPTIONAL" ]; then
         up_emit "optional $CORPUS_OPTIONAL present"
     else
@@ -1226,15 +1285,18 @@ stage_generate() {
     #
     # and the two claims the pipeline is allowed to make afterwards:
     #
-    #     generated 11/11          gen1 and gen2 are byte-identical
+    #     generated 36/36          gen1 and gen2 are byte-identical over the
+    #                              36 upstream languages
     #     py32 covered 10/10 SAME  the ten vendored py32 stemmers are
-    #                               byte-identical to gen1
+    #                              byte-identical to gen1 (a cross-check
+    #                              subset, not the generation population)
     #
     # porter has no vendored py32 counterpart: its baseline is gen1 vs
     # gen2 only, and that is what the log says.
     #
-    # [2b] vendored-in (Task 10): the twelfth registered input, porter311,
-    # is not generated at all.  Its input is the vendored snowballstemmer
+    # [2b] vendored-in (Task 10): porter311, the control input that makes the
+    # 37th gate row (36 registry languages + this row), is not generated at
+    # all.  Its input is the vendored snowballstemmer
     # 3.1.1 porter_stemmer.py, taken as-is, so the stage only verifies that
     # the file exists and that its md5 still equals the registered value and
     # logs `stage=generate lang=porter311 source=vendored-3.1.1 md5=<value>`
@@ -1250,12 +1312,18 @@ stage_generate() {
 
     # The detail log describes the most recent run only.
     : > "$GENERATE_LOG" 2>/dev/null || true
+    # The language-population size, derived from the list itself: every count
+    # claim below compares against this, never against a literal (the
+    # population is 36, not the 11 the batch started with).
+    _gen_n=$(set -- $GEN_LANGS; echo $#)
+    _gen_py32_n=$(set -- $PY32_LANGS; echo $#)
 
     # -- 0. [2b] vendored-in: the porter311 control input ---------------
-    # Not a generation: the twelfth registered input is the vendored
-    # snowballstemmer-3.1.1 porter_stemmer.py, so all the stage can do is
-    # verify it is still the registered bytes.  The check runs first, before
-    # any snapshot or compiler invocation, so a broken vendored input fails
+    # Not a generation: porter311 is the registered control input (the 37th
+    # gate row) and its source is the vendored snowballstemmer-3.1.1
+    # porter_stemmer.py, so all the stage can do is verify it is still the
+    # registered bytes.  The check runs first, before any snapshot or
+    # compiler invocation, so a broken vendored input fails
     # the stage immediately and no `.mbt` is ever written for it.
     #
     #     missing        stderr names the absolute path and `vendor missing`;
@@ -1310,94 +1378,146 @@ stage_generate() {
     # Without WSL the upstream compiler cannot run at all, so the generation
     # is skipped and the vendored inputs take its place.  The ten vendored
     # py32 stemmers ARE the compiler's output (that is the equivalence T3
-    # proved), so they are copied into out_root - the translator's only
-    # input directory - and the three main-path parity claims are replaced
-    # by the claims that can actually be checked here:
+    # proved) and cover a subset; the rest come from the 3.1.1 PyPI sources
+    # in $PY_PKG_ROOT_ABS, so all 36 generate-stage inputs exist.  They are
+    # materialised into out_root - the translator's only input directory -
+    # and `porter` is the exception: it has no 3.2.0 vendored source, so the
+    # committed 3.2.0 artifact is preserved instead of being overwritten by
+    # the 3.1.1 copy.  The main-path parity claims are replaced by the
+    # claims that can actually be checked here:
     #
-    #     vendored py32 10/10 present      a missing file is fatal (FE3)
+    #     vendored py-pkg 36/36 present    a missing file is fatal (FE3);
+    #                                      porter counts as present via its
+    #                                      committed artifact
     #     equivalent py32 10/10 SAME       bytes vs the gen1 baseline, when
     #                                      a real generation left one; a
     #                                      difference means the vendored
     #                                      copy is stale (AD1-8) and is fatal
-    #     porter=cached | missing          porter has no vendored
-    #                                      counterpart, so a previous WSL
-    #                                      generation in out_root is the only
-    #                                      honest source; absent -> refuse
+    #     out_root 36/36 inputs            35 regenerated + porter preserved
     #
     # Nothing is fabricated: an incomplete vendored set and a missing porter
-    # both exit 6, and the conservative choice is refusal (FE3), never an
-    # empty run.
+    # artifact both exit 6, and the conservative choice is refusal (FE3),
+    # never an empty run.
     if [ "$GENERATE_MODE" = vendored ]; then
-        _vg_dir="$VENDOR_ROOT_ABS/py32"
         gen_emit "stage=generate branch=vendored reason=no-wsl"
-        gen_emit "vendored_dir=$_vg_dir"
-        if [ ! -d "$_vg_dir" ]; then
-            gen_fail "generate failed: vendored input directory missing: $_vg_dir (FE3: the vendored set is incomplete; restore it by the U1-a copy contract and re-run)"
+        if ! mkdir -p "$OUT_ROOT_ABS" 2>/dev/null; then
+            gen_fail "generate failed: cannot create out_root $OUT_ROOT_ABS"
             return "$EXIT_GENERATE"
         fi
+        gen_emit "vendored_dir=$PY_PKG_ROOT_ABS"
+
+        if [ ! -d "$PY_PKG_ROOT_ABS" ]; then
+            gen_fail "generate failed: vendored input directory missing: $PY_PKG_ROOT_ABS (FE3: the vendored set is incomplete; restore it by the U1-a copy contract and re-run)"
+            return "$EXIT_GENERATE"
+        fi
+
+        _vg_total_all=$(set -- $GEN_LANGS; echo $#)
         _vg_present=0
         _vg_missing=""
-        for _gen_lang in $PY32_LANGS; do
-            if [ -f "$_vg_dir/${_gen_lang}_stemmer.py" ]; then
+        for _gen_lang in $GEN_LANGS; do
+            # The preserved entry is satisfied by its committed artifact, not
+            # by a py-pkg copy, so it is counted as present here without
+            # requiring the 3.1.1 file to exist at all.
+            if [ "$_gen_lang" = "$PRESERVED_PORTER_LANG" ]; then
+                _vg_present=$((_vg_present + 1))
+            elif [ -f "$PY_PKG_ROOT_ABS/${_gen_lang}_stemmer.py" ]; then
                 _vg_present=$((_vg_present + 1))
             else
-                _vg_missing="$_vg_missing $_vg_dir/${_gen_lang}_stemmer.py"
+                _vg_missing="$_vg_missing $PY_PKG_ROOT_ABS/${_gen_lang}_stemmer.py"
             fi
         done
-        if [ "$_vg_present" -ne 10 ]; then
+        if [ "$_vg_present" -ne "$_vg_total_all" ]; then
             for _vg_f in $_vg_missing; do
                 gen_fail "generate failed: vendored input missing: $_vg_f"
             done
-            gen_fail "generate failed: vendored py32 coverage $_vg_present/10 (FE3: an incomplete vendored set is refused, never run empty)"
+            gen_fail "generate failed: vendored coverage $_vg_present/$_vg_total_all"
             return "$EXIT_GENERATE"
         fi
-        gen_emit "vendored py32 $_vg_present/10 present"
-
-        _vg_porter="$OUT_ROOT_ABS/porter_stemmer.py"
-        if [ -f "$_vg_porter" ]; then
-            _vg_porter_md5=$(md5sum "$_vg_porter" 2>/dev/null | cut -d' ' -f1)
-            gen_emit "porter=cached file=$_vg_porter md5=$_vg_porter_md5"
-        else
-            gen_fail "generate failed: porter=cached missing: $_vg_porter (porter has no vendored counterpart and no earlier WSL generation is cached there; run the pipeline once with WSL available, or restore the file)"
-            return "$EXIT_GENERATE"
-        fi
+        gen_emit "vendored py-pkg $_vg_present/$_vg_total_all present (1 preserved, not vendored)"
 
         if [ -f "$GEN1_ROOT/english_stemmer.py" ]; then
             _vg_same=0
+            _vg_checked=0
             for _gen_lang in $PY32_LANGS; do
-                if cmp -s "$GEN1_ROOT/${_gen_lang}_stemmer.py" "$_vg_dir/${_gen_lang}_stemmer.py"; then
-                    _vg_same=$((_vg_same + 1))
-                else
-                    gen_fail "generate failed: $_gen_lang differs (the gen1 baseline of a real generation vs the vendored py32 stemmer: the vendored copy is stale)"
-                    gen_fail "generate failed: differing files: $GEN1_ROOT/${_gen_lang}_stemmer.py $_vg_dir/${_gen_lang}_stemmer.py"
-                    return "$EXIT_GENERATE"
+                if [ -f "$GEN1_ROOT/${_gen_lang}_stemmer.py" ] && [ -f "$PY_PKG_ROOT_ABS/${_gen_lang}_stemmer.py" ]; then
+                    _vg_checked=$((_vg_checked + 1))
+                    if cmp -s "$GEN1_ROOT/${_gen_lang}_stemmer.py" "$PY_PKG_ROOT_ABS/${_gen_lang}_stemmer.py"; then
+                        _vg_same=$((_vg_same + 1))
+                    else
+                        gen_fail "generate failed: $_gen_lang differs (the gen1 baseline of a real generation vs the vendored stemmer: the vendored copy is stale)"
+                        gen_fail "generate failed: differing files: $GEN1_ROOT/${_gen_lang}_stemmer.py $PY_PKG_ROOT_ABS/${_gen_lang}_stemmer.py"
+                        return "$EXIT_GENERATE"
+                    fi
                 fi
             done
-            gen_emit "equivalent py32 $_vg_same/10 SAME (gen1 baseline vs vendored)"
+            gen_emit "equivalent py32 $_vg_same/$_vg_checked SAME (gen1 baseline vs vendored)"
         else
-            gen_emit "equivalent py32 na/10 (no gen1 baseline in $GEN1_ROOT; nothing to compare against)"
+            gen_emit "equivalent py32 na/$(set -- $PY32_LANGS; echo $#) (no gen1 baseline in $GEN1_ROOT; nothing to compare against)"
         fi
 
-        for _gen_lang in $PY32_LANGS; do
-            if ! cp "$_vg_dir/${_gen_lang}_stemmer.py" "$OUT_ROOT_ABS/${_gen_lang}_stemmer.py" 2>/dev/null; then
-                gen_fail "generate failed: cannot copy the vendored input $_vg_dir/${_gen_lang}_stemmer.py into $OUT_ROOT_ABS"
+        # Every language but one is sourced from py-pkg (or py32 where a
+        # 3.2.0 counterpart exists).  `porter` is the exception: there is no
+        # vendored 3.2.0 Python for it, and the 3.1.1 PyPI copy is the SAME
+        # algorithm as porter311 — materialising it would erase the control
+        # row's reason to exist.  So `porter` is preserved, not regenerated:
+        # no out_root copy is written (a stale one is removed so nothing can
+        # consume the 3.1.1 form later), translate excludes it, and the
+        # committed 3.2.0 artifact stands.
+        _vg_preserved=0
+        _vg_regenerated=0
+        _vg_total=0
+        for _gen_lang in $GEN_LANGS; do
+            _vg_total=$((_vg_total + 1))
+            if [ "$_gen_lang" = "$PRESERVED_PORTER_LANG" ]; then
+                _pres="$MODULE_ROOT/$_gen_lang/${_gen_lang}_gen.mbt"
+                if [ ! -f "$_pres" ]; then
+                    gen_fail "generate failed: preserved artifact missing: $_pres (the vendored branch has no $PRESERVED_PORTER_VERSION source for $_gen_lang, so the committed artifact is the only honest input; restore it from git and re-run)"
+                    return "$EXIT_GENERATE"
+                fi
+                rm -f "$OUT_ROOT_ABS/${_gen_lang}_stemmer.py" 2>/dev/null || true
+                _vg_preserved=$((_vg_preserved + 1))
+                gen_emit "vendored lang=$_gen_lang source=preserved-$PRESERVED_PORTER_VERSION reason=no-$PRESERVED_PORTER_VERSION-vendored-source"
+                continue
+            fi
+            _src="$PY_PKG_ROOT_ABS/${_gen_lang}_stemmer.py"
+            if [ -f "$VENDOR_ROOT_ABS/py32/${_gen_lang}_stemmer.py" ]; then
+                _src="$VENDOR_ROOT_ABS/py32/${_gen_lang}_stemmer.py"
+                gen_emit "vendored lang=$_gen_lang source=py32-$PRESERVED_PORTER_VERSION"
+            else
+                gen_emit "vendored lang=$_gen_lang source=py-pkg-$PYPI_VERSION"
+            fi
+            if ! cp "$_src" "$OUT_ROOT_ABS/${_gen_lang}_stemmer.py" 2>/dev/null; then
+                gen_fail "generate failed: cannot copy the vendored input $_src into $OUT_ROOT_ABS"
                 return "$EXIT_GENERATE"
             fi
+            _vg_regenerated=$((_vg_regenerated + 1))
         done
+
+        # Coverage is counted over the whole $GEN_LANGS population, with the
+        # preserved entry satisfied by its committed artifact rather than by
+        # an out_root copy, so the denominator stays the language list itself.
         _vg_out=0
         for _gen_lang in $GEN_LANGS; do
-            if [ -f "$OUT_ROOT_ABS/${_gen_lang}_stemmer.py" ]; then
+            if [ "$_gen_lang" = "$PRESERVED_PORTER_LANG" ]; then
+                if [ -f "$MODULE_ROOT/$_gen_lang/${_gen_lang}_gen.mbt" ]; then
+                    _vg_out=$((_vg_out + 1))
+                fi
+            elif [ -f "$OUT_ROOT_ABS/${_gen_lang}_stemmer.py" ]; then
                 _vg_out=$((_vg_out + 1))
             fi
         done
-        if [ "$_vg_out" -ne 11 ]; then
-            gen_fail "generate failed: out_root $_vg_out/11 inputs after the vendored materialisation (10 vendored + porter cached expected)"
+        if [ "$_vg_out" -ne "$_vg_total" ]; then
+            gen_fail "generate failed: out_root $_vg_out/$_vg_total inputs after the vendored materialisation"
             return "$EXIT_GENERATE"
         fi
-        gen_emit "out_root $_vg_out/11 inputs (10 vendored py32 + porter cached)"
+        gen_emit "out_root $_vg_out/$_vg_total inputs ($_vg_regenerated regenerated + $_vg_preserved preserved, not regenerated)"
+        gen_emit "$PRESERVED_PORTER_LANG=preserved-$PRESERVED_PORTER_VERSION (committed artifact kept; the other $((_vg_total - _vg_preserved)) are vendored copies)"
         # FR-08: one marker per artifact this stage established in out_root.
-        # porter311 is vendored, never generated, so it is not one of them.
+        # The preserved artifact is NOT listed: this stage did not rewrite it.
         for _gen_lang in $GEN_LANGS; do
+            if [ "$_gen_lang" = "$PRESERVED_PORTER_LANG" ]; then
+                continue
+            fi
             emit_regenerated "$OUT_ROOT_ABS/${_gen_lang}_stemmer.py"
         done
         return 0
@@ -1479,8 +1599,8 @@ $GEN2_ROOT"
             # variables would be a second, drifting copy of what ran.
             _gen_cmd_n=$(grep -c '^stage=generate lang=.* cmd=' "$GENERATE_RAW_LOG" 2>/dev/null)
             [ -n "$_gen_cmd_n" ] || _gen_cmd_n=0
-            if [ "$_gen_cmd_n" -lt 11 ]; then
-                gen_fail "generate failed: the gen1 transcript holds $_gen_cmd_n/11 stage=generate cmd= lines (one per upstream language expected)"
+            if [ "$_gen_cmd_n" -lt "$_gen_n" ]; then
+                gen_fail "generate failed: the gen1 transcript holds $_gen_cmd_n/$_gen_n stage=generate cmd= lines (one per upstream language expected)"
                 return "$EXIT_GENERATE"
             fi
             grep '^stage=generate lang=.* cmd=' "$GENERATE_RAW_LOG" 2>/dev/null | tr -d '\r' | while IFS= read -r _gen_cmdline; do
@@ -1491,8 +1611,9 @@ $GEN2_ROOT"
     done
 
     # -- 4. parity ------------------------------------------------------
-    # gen1 against gen2 for the eleven upstream languages, and gen1
-    # against the vendored py32 stemmers for the ten that have one.
+    # gen1 against gen2 for all 36 upstream languages, and gen1 against the
+    # vendored py32 stemmers for the ten that have one (a cross-check
+    # subset).
     _gen_same=0
     for _gen_lang in $GEN_LANGS; do
         if cmp -s "$GEN1_ROOT/${_gen_lang}_stemmer.py" "$GEN2_ROOT/${_gen_lang}_stemmer.py"; then
@@ -1503,11 +1624,11 @@ $GEN2_ROOT"
             return "$EXIT_GENERATE"
         fi
     done
-    if [ "$_gen_same" -ne 11 ]; then
-        gen_fail "generate failed: parity $_gen_same/11"
+    if [ "$_gen_same" -ne "$_gen_n" ]; then
+        gen_fail "generate failed: parity $_gen_same/$_gen_n"
         return "$EXIT_GENERATE"
     fi
-    gen_emit "generated $_gen_same/11"
+    gen_emit "generated $_gen_same/$_gen_n"
     _gen_py32=0
     for _gen_lang in $PY32_LANGS; do
         if cmp -s "$GEN1_ROOT/${_gen_lang}_stemmer.py" "$VENDOR_ROOT_ABS/py32/${_gen_lang}_stemmer.py"; then
@@ -1518,16 +1639,16 @@ $GEN2_ROOT"
             return "$EXIT_GENERATE"
         fi
     done
-    if [ "$_gen_py32" -ne 10 ]; then
-        gen_fail "generate failed: parity $_gen_py32/10"
+    if [ "$_gen_py32" -ne "$_gen_py32_n" ]; then
+        gen_fail "generate failed: parity $_gen_py32/$_gen_py32_n"
         return "$EXIT_GENERATE"
     fi
-    gen_emit "py32 covered $_gen_py32/10 SAME"
-    gen_emit "porter: no vendored py32 counterpart; its baseline is gen1 vs gen2 only (it is part of the 11/11 claim, never of the py32 count)"
+    gen_emit "py32 covered $_gen_py32/$_gen_py32_n SAME"
+    gen_emit "porter: no vendored py32 counterpart; its baseline is gen1 vs gen2 only (it is part of the generated $_gen_n/$_gen_n claim, never of the py32 count)"
 
     # -- 5. out_root against gen1 ---------------------------------------
     # The deliverable directory is compared byte for byte against the gen1
-    # baseline: without it the stage could report 11/11 while the files it
+    # baseline: without it the stage could report parity while the files it
     # hands to the translator are stale leftovers of an earlier run
     # (tools/gen_all.sh clears the files it owns; this is the second gate).
     _gen_out_same=0
@@ -1540,11 +1661,11 @@ $GEN2_ROOT"
             return "$EXIT_GENERATE"
         fi
     done
-    if [ "$_gen_out_same" -ne 11 ]; then
-        gen_fail "generate failed: out_root parity $_gen_out_same/11"
+    if [ "$_gen_out_same" -ne "$_gen_n" ]; then
+        gen_fail "generate failed: out_root parity $_gen_out_same/$_gen_n"
         return "$EXIT_GENERATE"
     fi
-    gen_emit "out_root $_gen_out_same/11 identical to gen1"
+    gen_emit "out_root $_gen_out_same/$_gen_n identical to gen1"
     # FR-08: every deliverable input this stage wrote into out_root.  The two
     # parity directories are reconsidered baselines, not artifacts handed on,
     # and porter311 is vendored: none of them is marked here.
@@ -1559,16 +1680,17 @@ stage_translate() {
     # Task 4 - the translator segment.
     #
     # Input:  $OUT_ROOT_ABS, the pipeline's resolved out_root (default
-    #         build/gen), holding the eleven generated
-    #         <lang>_stemmer.py files, plus the vendored snowballstemmer
-    #         3.1.1 porter_stemmer.py of the twelfth input (porter311).
-    #         The first invocation selects the eleven deliverables (the
-    #         default of tools/lang_inputs.py); a second invocation selects
-    #         porter311 with --lang porter311 --include-control, the only way
-    #         a non-deliverable control entry is translated.
+    #         build/gen), holding the 36 generated <lang>_stemmer.py files
+    #         (35 in the vendored branch, where `porter` is preserved), plus
+    #         the vendored snowballstemmer 3.1.1 porter_stemmer.py of the
+    #         porter311 control input.  The first invocation selects the 36
+    #         deliverables (the default of tools/lang_inputs.py); a second
+    #         invocation selects porter311 with --lang porter311
+    #         --include-control, the only way a non-deliverable control entry
+    #         is translated.
     # Output: <module-root>/<lang>/<lang>_gen.mbt (raw translator output)
-    #         + <module-root>/<lang>/moon.pkg, one package per input: the
-    #         eleven deliverables and porter311 (the 12th gate row, never a
+    #         + <module-root>/<lang>/moon.pkg, one package per input: the 36
+    #         deliverables and porter311 (the 37th gate row, never a
     #         deliverable and never a lang_registry.mbt entry).
     # Refusal: each language is written per language, so a refusal at
     #          language N leaves the files of languages 1..N-1 on disk (the
@@ -1576,7 +1698,7 @@ stage_translate() {
     #          writes after the whole file has been rewritten).  The stage is
     #          fail-fast, so the non-zero exit stops the run here and no later
     #          stage ever consumes the partial set.  The next translate run
-    #          snapshots and overwrites all twelve packages again.
+    #          snapshots and overwrites all 37 packages again.
     #
     # The detail log describes the most recent run only.
     # ------------------------------------------------------------------
@@ -1605,7 +1727,23 @@ stage_translate() {
     }
 
     : > "$TRANSLATE_LOG" 2>/dev/null || true
-    _tr_all_langs="$TR_LANGS $TR_CONTROL_LANGS"
+    # In the vendored branch `porter` has no 3.2.0 source to translate from
+    # (generate preserved the committed artifact instead), so it is excluded
+    # from this stage's selection and from its input/parity loops.  In the
+    # upstream branch generate really did produce a 3.2.0 porter_stemmer.py,
+    # so nothing is excluded and all 36 deliverables are translated.
+    _tr_excluded=""
+    if [ "$GENERATE_MODE" = vendored ]; then
+        _tr_excluded="$PRESERVED_PORTER_LANG"
+    fi
+    _tr_run_langs=""
+    for _tr_lang in $TR_LANGS; do
+        if [ -n "$_tr_excluded" ] && [ "$_tr_lang" = "$_tr_excluded" ]; then
+            continue
+        fi
+        _tr_run_langs="$_tr_run_langs $_tr_lang"
+    done
+    _tr_all_langs="$_tr_run_langs $TR_CONTROL_LANGS"
     _tr_vend="$VENDOR_ROOT_ABS/$VENDORED_PORTER311_REL"
 
     # The module name comes from moon.mod and is written verbatim into each
@@ -1649,21 +1787,24 @@ stage_translate() {
                 return "$EXIT_TRANSLATE"
             fi
         done
-        tr_emit "snapshot: preserved the 12 language directories -> $TR_SNAPSHOT_DIR"
+        tr_emit "snapshot: preserved the language directories -> $TR_SNAPSHOT_DIR"
     else
         tr_emit "snapshot: nothing to preserve"
     fi
 
     # -- 2. inputs -------------------------------------------------------
-    # The eleven generated Python stemmers plus the one vendored file.  A
-    # missing input names the parameter it came from and the file that is
-    # absent; nothing has been written at that point.  porter311's absence is
-    # reported as `vendor missing`, exactly as the generate stage does.
+    # The generated Python stemmers this stage will consume plus the one
+    # vendored file.  A missing input names the parameter it came from and
+    # the file that is absent; nothing has been written at that point.
+    # porter311's absence is reported as `vendor missing`, exactly as the
+    # generate stage does.  `porter` is only required in the upstream branch,
+    # where generate produced its 3.2.0 Python; the vendored branch preserved
+    # the committed artifact and needs no input for it.
     if [ ! -d "$OUT_ROOT_ABS" ]; then
         tr_fatal "translate failed: out_root ($OUT_SRC --out) does not exist: $OUT_ROOT_ABS"
         return "$EXIT_TRANSLATE"
     fi
-    for _tr_lang in $TR_LANGS; do
+    for _tr_lang in $_tr_run_langs; do
         if [ ! -f "$OUT_ROOT_ABS/${_tr_lang}_stemmer.py" ]; then
             tr_fatal "translate failed: missing input file: $OUT_ROOT_ABS/${_tr_lang}_stemmer.py (out_root, $OUT_SRC --out: $OUT_ROOT_ABS)"
             return "$EXIT_TRANSLATE"
@@ -1679,18 +1820,24 @@ stage_translate() {
         return "$EXIT_TRANSLATE"
     fi
 
-    # -- 3. the twelve translations --------------------------------------
+    # -- 3. the translations ---------------------------------------------
     # tools/translate_all.py writes <lang>/<lang>_gen.mbt and, when absent,
-    # <lang>/moon.pkg.  Two invocations: the eleven deliverables (the
-    # script's default selection) and then the porter311 control entry, which
-    # needs --include-control.  Each is logged with its own command.
+    # <lang>/moon.pkg.  Two invocations: the deliverables (the script's
+    # default selection, minus `porter` in the vendored branch, which has no
+    # 3.2.0 source) and then the porter311 control entry, which needs
+    # --include-control.  Each is logged with its own command.
     : > "$TRANSLATE_RAW_LOG" 2>/dev/null || true
-    TR_CMD="$PYTHON_BIN tools/translate_all.py --gen-dir $OUT_ROOT_ABS --out-root $MODULE_ROOT --module $TR_MODULE_NAME"
+    _tr_ex_flag=""
+    if [ -n "$_tr_excluded" ]; then
+        _tr_ex_flag=" --exclude $_tr_excluded"
+    fi
+    TR_CMD="\\"$PYTHON_BIN\\" tools/translate_all.py --gen-dir $OUT_ROOT_ABS --out-root $MODULE_ROOT --module $TR_MODULE_NAME$_tr_ex_flag"
     tr_log "cmd=$TR_CMD"
-    ( cd "$MODULE_ROOT" && $PYTHON_BIN tools/translate_all.py \
+    ( cd "$MODULE_ROOT" && "$PYTHON_BIN" tools/translate_all.py \
         --gen-dir "$OUT_ROOT_ABS" \
         --out-root "$MODULE_ROOT" \
-        --module "$TR_MODULE_NAME" ) >>"$TRANSLATE_RAW_LOG" 2>&1
+        --module "$TR_MODULE_NAME" \
+        ${_tr_excluded:+--exclude "$_tr_excluded"} ) >>"$TRANSLATE_RAW_LOG" 2>&1
     _tr_rc=$?
     tr_log "$(cat "$TRANSLATE_RAW_LOG" 2>/dev/null)"
     if [ "$_tr_rc" -ne 0 ]; then
@@ -1698,9 +1845,9 @@ stage_translate() {
         tail -n 20 "$TRANSLATE_RAW_LOG" 2>/dev/null >&2
         return "$EXIT_TRANSLATE"
     fi
-    TR_CTRL_CMD="$PYTHON_BIN tools/translate_all.py --gen-dir $OUT_ROOT_ABS --out-root $MODULE_ROOT --module $TR_MODULE_NAME --lang $TR_CONTROL_LANGS --include-control"
+    TR_CTRL_CMD="\\"$PYTHON_BIN\\" tools/translate_all.py --gen-dir $OUT_ROOT_ABS --out-root $MODULE_ROOT --module $TR_MODULE_NAME --lang $TR_CONTROL_LANGS --include-control"
     tr_log "cmd=$TR_CTRL_CMD"
-    ( cd "$MODULE_ROOT" && $PYTHON_BIN tools/translate_all.py \
+    ( cd "$MODULE_ROOT" && "$PYTHON_BIN" tools/translate_all.py \
         --gen-dir "$OUT_ROOT_ABS" \
         --out-root "$MODULE_ROOT" \
         --module "$TR_MODULE_NAME" \
@@ -1717,7 +1864,10 @@ stage_translate() {
     # Per-language lines: file, out, raw line count, elapsed seconds.  The
     # counts are the translator's raw output; the post-moon fmt counts are
     # Task 5's business.  porter311's `file=` is the vendored Python: it has
-    # no out_root copy, because [2b] never generates it.
+    # no out_root copy, because [2b] never generates it.  A preserved
+    # deliverable (porter in the vendored branch) is reported separately with
+    # `preserved=1` and contributes its on-disk count without claiming this
+    # stage rewrote it.
     _tr_total=0
     _tr_start=$(date +%s)
     for _tr_lang in $_tr_all_langs; do
@@ -1738,6 +1888,19 @@ stage_translate() {
         emit_regenerated "$_tr_mbt"
         _tr_start=$_tr_now
     done
+    # The preserved deliverable: reported for completeness, but with no
+    # `regenerated` marker — this stage did not write it.
+    if [ -n "$_tr_excluded" ]; then
+        for _tr_lang in $_tr_excluded; do
+            _tr_mbt="$MODULE_ROOT/$_tr_lang/${_tr_lang}_gen.mbt"
+            if [ ! -f "$_tr_mbt" ]; then
+                tr_fail "translate failed: expected preserved artifact missing: $_tr_mbt"
+                return "$EXIT_TRANSLATE"
+            fi
+            _tr_lines=$(wc -l <"$_tr_mbt" | tr -d ' ')
+            tr_emit "stage=translate lang=$_tr_lang file=preserved-$PRESERVED_PORTER_VERSION out=$_tr_mbt lines=$_tr_lines preserved=1"
+        done
+    fi
 
     # -- 4. residue assertions -------------------------------------------
     # AD1-3 (`self.`), AD1-4 (`@rt::`) and AD1-5 (` in range(`) must be
@@ -1775,7 +1938,11 @@ stage_translate() {
         fi
     done
 
-    tr_emit "translated 12/12 raw_lines=$_tr_total residues=0 raise-parity=12/12"
+    # The counts are derived from the selection, never written as literals:
+    # in the vendored branch `porter` is excluded (36 translated inputs, of
+    # which 35 deliverables) and in the upstream branch all 36 are translated.
+    _tr_n=$(set -- $_tr_all_langs; echo $#)
+    tr_emit "translated $_tr_n/$_tr_n raw_lines=$_tr_total residues=0 raise-parity=$_tr_n/$_tr_n"
     return 0
 }
 
@@ -1785,9 +1952,9 @@ stage_fmt() {
     #
     # Input:  <module-root>/<lang>/<lang>_gen.mbt, the raw translator
     #         output the translate stage wrote.
-    # Output: the same eleven files in their post-`moon fmt` form, which is
-    #         the form the repository commits (R9: the deliverable is the
-    #         raw output *after* normalisation, never a hand edit).
+    # Output: the same 36 deliverable files in their post-`moon fmt` form,
+    #         which is the form the repository commits (R9: the deliverable
+    #         is the raw output *after* normalisation, never a hand edit).
     #
     # `moon fmt` is invoked plainly, never with --check: on this machine
     # --check shells out to `git --no-pager diff` and dies with
@@ -1795,13 +1962,13 @@ stage_fmt() {
     # the rewrite happen at all; idempotence is proved separately by
     # running the formatter a second time and comparing the md5 baselines.
     #
-    # The formatter is run once over the twelve input packages by name, not
-    # over the whole module: `moon fmt` with no path also rewrites runtime/,
-    # cmd/golden/ and the root moon.pkg, and those are not this stage's
-    # deliverables.  Naming the packages keeps the stage's write set exactly
-    # the twelve *_gen.mbt files (the eleven deliverables + porter311).
-    # The count claims keep the two populations apart: 11 deliverables =
-    # 10,837 lines, and with the porter311 control row = 11,407 lines.
+    # The formatter is run once over the 37 input packages by name (the 36
+    # deliverables plus the porter311 control package), not over the whole
+    # module: `moon fmt` with no path also rewrites runtime/, cmd/golden/ and
+    # the root moon.pkg, and those are not this stage's deliverables.  Naming
+    # the packages keeps the stage's write set exactly the 37 *_gen.mbt files
+    # (the 36 deliverables + porter311).  The two populations are counted
+    # apart: the 36 deliverables and the single porter311 control row.
     #
     # The detail log describes the most recent run only.
     # ------------------------------------------------------------------
@@ -1827,6 +1994,11 @@ stage_fmt() {
 
     _fmt_start=$(date +%s)
     _fmt_all_langs="$FMT_LANGS $FMT_CONTROL_LANGS"
+    # The two populations, derived from the lists themselves: the 36
+    # deliverables and the single porter311 control row.  Never literals.
+    _fmt_n_deliv=$(set -- $FMT_LANGS; echo $#)
+    _fmt_n_ctrl=$(set -- $FMT_CONTROL_LANGS; echo $#)
+    _fmt_snap_n=$(set -- $_fmt_all_langs; echo $#)
 
     # -- 1. inputs -------------------------------------------------------
     # Every input must exist before the formatter is allowed to run; a
@@ -1848,7 +2020,7 @@ stage_fmt() {
         fi
         _fmt_ctrl=$((_fmt_ctrl + 1))
     done
-    fmt_emit "input: $_fmt_files/11 deliverable *_gen.mbt + $_fmt_ctrl/1 porter311 present (raw translator output)"
+    fmt_emit "input: $_fmt_files/$_fmt_n_deliv deliverable *_gen.mbt + $_fmt_ctrl/$_fmt_n_ctrl porter311 present (raw translator output)"
 
     # -- 2. snapshot (the destructive-op precondition) ------------------
     # `moon fmt` rewrites every selected .mbt in place, so the raw form is
@@ -1873,10 +2045,10 @@ stage_fmt() {
             return "$EXIT_FMT"
         fi
     done
-    fmt_emit "snapshot: preserved the 12 *_gen.mbt (raw form) -> $FMT_SNAPSHOT_DIR"
+    fmt_emit "snapshot: preserved the $_fmt_snap_n *_gen.mbt (raw form) -> $FMT_SNAPSHOT_DIR"
 
     # -- 3. the formatter ------------------------------------------------
-    # One invocation, in the module root, over the twelve packages.  The
+    # One invocation, in the module root, over the 37 packages.  The
     # transcript goes to the fmt log, never through tee: the exit code
     # tested is moon's own.
     FMT_CMD="moon fmt $_fmt_all_langs"
@@ -1890,9 +2062,10 @@ stage_fmt() {
     fi
 
     # -- 4. baseline A: the post-fmt form --------------------------------
-    # md5 + line count per input.  The line counts are the spec's F-U2-21
-    # table (10,837 lines over the eleven deliverables; porter311 adds its
-    # own 570, for 11,407 over the twelve rows).
+    # md5 + line count per input.  The line counts are measured, never
+    # hard-coded: F-U2-21 registered a 12-row table for the original
+    # 11-language batch, and the population has since grown to the 36
+    # deliverables plus the porter311 control row.
     ( cd "$MODULE_ROOT" && md5sum */[a-z]*_gen.mbt ) >"$FMT_MD5_A" 2>/dev/null
     if [ $? -ne 0 ]; then
         fmt_fail "fmt failed: cannot write the md5 baseline $FMT_MD5_A"
@@ -1905,9 +2078,15 @@ stage_fmt() {
     fi
     _fmt_total=0
     _fmt_ctrl_total=0
+    _fmt_pres_lines=0
     for _fmt_lang in $_fmt_all_langs; do
         _fmt_n=$(wc -l <"$MODULE_ROOT/$_fmt_lang/${_fmt_lang}_gen.mbt" 2>/dev/null | tr -d ' ')
         _fmt_md5=$(md5sum "$MODULE_ROOT/$_fmt_lang/${_fmt_lang}_gen.mbt" 2>/dev/null | cut -d' ' -f1)
+        if [ "$GENERATE_MODE" = vendored ] && [ "$_fmt_lang" = "$PRESERVED_PORTER_LANG" ]; then
+            _fmt_pres_lines=$((${_fmt_pres_lines:-0} + ${_fmt_n:-0}))
+            fmt_emit "stage=fmt lang=$_fmt_lang file=$_fmt_lang/${_fmt_lang}_gen.mbt lines=$_fmt_n md5=$_fmt_md5 preserved=1"
+            continue
+        fi
         case " $FMT_LANGS " in
             *" $_fmt_lang "*) _fmt_total=$((_fmt_total + ${_fmt_n:-0})) ;;
             *) _fmt_ctrl_total=$((_fmt_ctrl_total + ${_fmt_n:-0})) ;;
@@ -1916,8 +2095,15 @@ stage_fmt() {
         # FR-08: `moon fmt` rewrote this deliverable in this run.
         emit_regenerated "$MODULE_ROOT/$_fmt_lang/${_fmt_lang}_gen.mbt"
     done
-    fmt_emit "formatted $_fmt_files/11 lines=$_fmt_total (post-moon fmt form)"
-    fmt_emit "formatted porter311/1 lines=$_fmt_ctrl_total (control row; 12 inputs = $((_fmt_total + _fmt_ctrl_total)) lines)"
+    _fmt_done=$_fmt_files
+    if [ "$_fmt_pres_lines" -gt 0 ]; then
+        _fmt_done=$((_fmt_files - 1))
+    fi
+    fmt_emit "formatted $_fmt_done/$_fmt_n_deliv deliverables lines=$_fmt_total (post-moon fmt form)"
+    fmt_emit "formatted control $_fmt_ctrl/$_fmt_n_ctrl lines=$_fmt_ctrl_total (porter311 row)"
+    if [ "$_fmt_pres_lines" -gt 0 ]; then
+        fmt_emit "preserved $PRESERVED_PORTER_LANG lines=$_fmt_pres_lines (committed $PRESERVED_PORTER_VERSION artifact, not reformatted output)"
+    fi
 
     # -- 5. idempotence: a second pass must not change a byte ------------
     ( cd "$MODULE_ROOT" && moon fmt $_fmt_all_langs ) >>"$FMT_LOG" 2>&1
@@ -1961,7 +2147,7 @@ stage_check() {
     # Four claims, in this order:
     #   1. `moon check --json` says success with 0 errors and 0 warnings
     #      (the JSON is kept verbatim as T6-check.json).
-    #   2. the module has exactly 15 packages - the 14 sub-packages plus the
+    #   2. the module has exactly 40 packages - the 39 sub-packages plus the
     #      empty-rel root package that carries lang_registry.mbt (N8).
     #   3. `moon info` runs BEFORE any `.mbti` assertion (D-8), and then the
     #      AD2-1..AD2-5 / AD2-2 / AD2-8 counts hold (T6-mbti.log).
@@ -2021,10 +2207,10 @@ PY
         return "$EXIT_CHECK"
     fi
 
-    # -- 2. the 15 packages (N8) ----------------------------------------
-    # Counted from all_pkgs.json, never hard-coded: the count and the rel-set
-    # are both read back from what the toolchain actually planned.  A
-    # mismatch prints the set difference.
+    # -- 2. the 40 packages (N8) ----------------------------------------
+    # The rel-set comes from all_pkgs.json, i.e. from what the toolchain
+    # actually planned; the expected set and the 40-package count are the
+    # claim being checked.  A mismatch prints the set difference.
     _ck_pkgs=$( cd "$MODULE_ROOT" && "$PYTHON_BIN" - <<'PY'
 import json, pathlib, re, sys
 root = pathlib.Path.cwd()
@@ -2043,14 +2229,12 @@ if not p.is_file():
 data = json.loads(p.read_text(encoding='utf-8'))
 rels = sorted({x.get('rel', '') for x in data.get('packages', [])
                if x.get('root') == mod})
-want = {'', 'runtime', 'cmd/golden', 'arabic', 'dutch', 'english', 'french',
-        'german', 'italian', 'porter', 'porter311', 'portuguese', 'russian',
-        'spanish', 'turkish'}
+want = {'', 'runtime', 'cmd/golden', 'arabic', 'armenian', 'basque', 'catalan', 'czech', 'danish', 'dutch', 'dutch_porter', 'english', 'esperanto', 'estonian', 'finnish', 'french', 'german', 'greek', 'hindi', 'hungarian', 'indonesian', 'irish', 'italian', 'lithuanian', 'nepali', 'norwegian', 'persian', 'polish', 'porter', 'porter311', 'portuguese', 'romanian', 'russian', 'serbian', 'sesotho', 'spanish', 'swedish', 'tamil', 'turkish', 'yiddish'}
 print(len(rels))
 missing = sorted(want - set(rels))
 extra = sorted(set(rels) - want)
-if len(rels) != 15 or missing or extra:
-    print('FAIL count=%d want=15 missing=%s extra=%s' % (len(rels), missing, extra))
+if len(rels) != 40 or missing or extra:
+    print('FAIL count=%d want=40 missing=%s extra=%s' % (len(rels), missing, extra))
     sys.exit(1)
 print('OK ' + ' '.join('<' + r + '>' if r == '' else r for r in rels))
 sys.exit(0)
@@ -2109,8 +2293,8 @@ stage_golden() {
     # defects P3 and P4).
     #
     # Two commands, in this order:
-    #   1. the driver: `moon run cmd/golden`, twelve `lang=... checked=...
-    #      mismatch=...` rows plus twelve `lang=<n> lines=<M>` rows.  Its
+    #   1. the driver: `moon run cmd/golden`, 37 `lang=... checked=...
+    #      mismatch=...` rows plus 37 `lang=<n> lines=<M>` rows.  Its
     #      exit code is taken from the command itself:
     #          moon run cmd/golden > log 2>&1; rc=$?
     #      never through `| tee`, whose exit code is tee's, not the driver's.
@@ -2211,30 +2395,85 @@ stage_golden() {
         return "$EXIT_GOLDEN"
     fi
 
-    # Task 12 (FR-20): the twelve `lang=<n> lines=<M>` rows and the
-    # `line-count drift: <k>/12` summary must both be present.  A warned row
-    # (` WARN line-count drift`) is NOT a gate failure — drift is a warning by
-    # design — but a missing row set is: the driver would have stopped emitting
-    # the baseline block.  Both facts are logged so the transcript carries them.
+    # Task 12 (FR-20): the 37 `lang=<n> lines=<M>` rows and the
+    # `line-count drift: <k>/37` summary must both be present, and the summary's
+    # denominator must be the number of line rows actually emitted — the driver
+    # prints `<k>/<rows.length()>`, so a stale hard-coded denominator here would
+    # reject a healthy log.  A warned row (` WARN line-count drift`) is NOT a
+    # gate failure — drift is a warning by design — but a missing row set is:
+    # the driver would have stopped emitting the baseline block.  Both facts
+    # are logged so the transcript carries them.
     _g_line_rows=$(grep -cE '^lang=.* lines=' "$GOLDEN_LOG" 2>/dev/null)
-    _g_drift=$(grep -oE 'line-count drift: [0-9]+/12' "$GOLDEN_LOG" 2>/dev/null)
+    _g_drift=$(grep -oE 'line-count drift: [0-9]+/[0-9]+' "$GOLDEN_LOG" 2>/dev/null)
     _g_warns=$(grep -cE '^lang=.* lines=.* WARN line-count drift$' "$GOLDEN_LOG" 2>/dev/null)
-    if [ "$_g_line_rows" -ne 12 ]; then
-        log_err "golden failed: expected 12 lines= rows, got ${_g_line_rows:-0}"
+    if [ "$_g_line_rows" -ne 37 ]; then
+        log_err "golden failed: expected 37 lines= rows, got ${_g_line_rows:-0}"
         log_err "stage=golden exit=$EXIT_GOLDEN"
         return "$EXIT_GOLDEN"
     fi
     if [ -z "$_g_drift" ]; then
-        log_err "golden failed: the 'line-count drift: <k>/12' summary is missing"
+        log_err "golden failed: the 'line-count drift: <k>/37' summary is missing"
+        log_err "stage=golden exit=$EXIT_GOLDEN"
+        return "$EXIT_GOLDEN"
+    fi
+    if [ "${_g_drift##*/}" -ne "$_g_line_rows" ]; then
+        log_err "golden failed: drift summary denominator ${_g_drift##*/} != $_g_line_rows line rows"
         log_err "stage=golden exit=$EXIT_GOLDEN"
         return "$EXIT_GOLDEN"
     fi
 
-    # The twelve `lang=<n> checked=<N> mismatch=<M>` rows are copied into the
-    # run log verbatim, one per line, so the acceptance transcript proves the
-    # 12-row claim without having to open T7-golden.log.  The rows come from
-    # the driver's own log and the verdict above is the gate's: the two are
-    # not a second assertion, only a copy of what the gate already accepted.
+    # -- provenance assertion (P-1 regression guard) ----------------------
+    # The 20% drift tolerance is blind to a *provenance* change: overwriting
+    # the 3.2.0 `porter` deliverable with the 3.1.1 PyPI copy moves it 538 ->
+    # 570 lines, only 5.9%, so `line-count drift: 0/37` still passed and
+    # porter became a duplicate of its own porter311 control row.  The header
+    # each translator writes (`Generated by translate.py from Snowball <ver>`)
+    # is therefore asserted against the version the input actually came from:
+    # the source Python's own header, or the pinned version for a preserved
+    # artifact (which has no vendored source).  Additive: the drift check
+    # above still runs.
+    _g_prov_ok=0
+    _g_prov_bad=0
+    for _g_pv_lang in $GEN_LANGS $TR_CONTROL_LANGS; do
+        _g_pv_mbt="$MODULE_ROOT/$_g_pv_lang/${_g_pv_lang}_gen.mbt"
+        if [ ! -f "$_g_pv_mbt" ]; then
+            log_err "golden failed: provenance $_g_pv_lang want=? got=missing ($_g_pv_mbt)"
+            _g_prov_bad=$((_g_prov_bad + 1))
+            continue
+        fi
+        _g_pv_got=$(head -n 1 "$_g_pv_mbt" 2>/dev/null | sed -n 's/.*from Snowball \([0-9][0-9.]*\) .*/\1/p')
+        if [ "$_g_pv_lang" = "$TR_CONTROL_LANGS" ]; then
+            _g_pv_want="$PYPI_VERSION"
+        elif [ "$_g_pv_lang" = "$PRESERVED_PORTER_LANG" ]; then
+            _g_pv_want="$PRESERVED_PORTER_VERSION"
+        else
+            _g_pv_src="$OUT_ROOT_ABS/${_g_pv_lang}_stemmer.py"
+            _g_pv_want=$(head -n 1 "$_g_pv_src" 2>/dev/null | sed -n 's/.*Snowball \([0-9][0-9.]*\) .*/\1/p')
+            if [ -z "$_g_pv_want" ]; then
+                log_err "golden failed: provenance $_g_pv_lang want=? got=$_g_pv_got (cannot read the version from the source $_g_pv_src)"
+                _g_prov_bad=$((_g_prov_bad + 1))
+                continue
+            fi
+        fi
+        if [ -z "$_g_pv_got" ] || [ "$_g_pv_got" != "$_g_pv_want" ]; then
+            log_err "golden failed: provenance $_g_pv_lang want=$_g_pv_want got=${_g_pv_got:-none}"
+            _g_prov_bad=$((_g_prov_bad + 1))
+            continue
+        fi
+        _g_prov_ok=$((_g_prov_ok + 1))
+    done
+    if [ "$_g_prov_bad" -ne 0 ]; then
+        log_err "stage=golden exit=$EXIT_GOLDEN"
+        return "$EXIT_GOLDEN"
+    fi
+    log_line "golden provenance $_g_prov_ok/$_g_prov_ok OK (porter=$PRESERVED_PORTER_VERSION, porter311=$PYPI_VERSION, rest match their source)"
+
+    # The 37 `lang=<n> checked=<N> mismatch=<M>` rows are copied into the
+    # run log verbatim, one per line, so the acceptance transcript proves
+    # the 37-row claim without having to open T7-golden.log.  The rows come
+    # from the driver's own log and the verdict above is the gate's: the two
+    # are not a second assertion, only a copy of what the gate already
+    # accepted.
 
     while IFS= read -r _g_row; do
         case "$_g_row" in

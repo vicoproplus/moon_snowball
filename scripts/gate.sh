@@ -18,19 +18,19 @@
 # declared value is porter's, contract §3.4).
 #
 # Tri-state outcome:
-#   healthy   exactly 12 rows, the language set is the expected 12, every
+#   healthy   exactly 37 rows, the language set is the expected 37, every
 #             `checked` equals its declared value, every `mismatch` is 0 and
 #             the driver exited 0        -> prints `GATE OK`, exit 0
-#   degraded  0 rows / fewer than 12 rows / an unexpected language / a
-#             `checked` that does not match  -> `expected 12 rows, got <n>`
+#   degraded  0 rows / fewer than 37 rows / an unexpected language / a
+#             `checked` that does not match  -> `expected 37 rows, got <n>`
 #             (plus the missing names) or `checked mismatch <lang> want=<N>
 #             got=<M>`, exit 1
 #   failed    a non-zero `mismatch`, a non-zero driver exit, any collected
-#             `MISMATCH` detail line, a missing `golden: 12/12 mismatch=0`
+#             `MISMATCH` detail line, a missing `golden: 37/37 mismatch=0`
 #             summary or a missing `case=` boundary line ->
 #             `FAIL: mismatch != 0` (up to 5 `MISMATCH` detail lines),
 #             `driver exit=<rc> rows=<n>`, `FAIL: <n> MISMATCH detail line(s)
-#             present`, `FAIL: missing driver summary 'golden: 12/12
+#             present`, `FAIL: missing driver summary 'golden: 37/37
 #             mismatch=0'` or `FAIL: missing driver boundary line 'case='`,
 #             exit 1
 #
@@ -73,7 +73,8 @@ if [ ! -f "$REGISTRY" ]; then
 fi
 
 # One awk pass, three assertion groups:
-#   BEGIN  read the registry into want[name] and order[1..12]
+#   BEGIN  read the registry into want[name] and order[1..37] (36 registry
+#          languages + the porter311 control row appended below)
 #   rows   parse every comparison row into names[]/got_checked[]/got_mismatch[]
 #   END    judge the four conditions and print every violation it finds
 # A missing language, a wrong `checked`, a non-zero `mismatch` and a non-zero
@@ -99,7 +100,7 @@ BEGIN {
         }
     }
     close(regf)
-    if (nreg != 11 || !("porter" in want)) {
+    if (nreg != 36 || !("porter" in want)) {
         printf "gate: cannot read the registry: %s (%d entries)\n", regf, nreg
         fatal = 1
     } else {
@@ -138,10 +139,10 @@ BEGIN {
 
 # The summary line the driver prints (`golden: <ok>/<rows> mismatch=<sum>`)
 # and its boundary assertion (`case=...`) are the two lines the row checks
-# imply: a truncated transcript could satisfy the twelve rows and still have
+# imply: a truncated transcript could satisfy the 37 rows and still have
 # neither.
 /^golden: / {
-    if ($0 == "golden: 12/12 mismatch=0") {
+    if ($0 == "golden: 37/37 mismatch=0") {
         nsum++
     }
 }
@@ -161,9 +162,10 @@ END {
         bad = 1
     }
 
-    # 2. exactly 12 rows, and the language set must be the expected one.
-    if (nrows != 12) {
-        printf "expected 12 rows, got %d\n", nrows
+    # 2. exactly 37 rows (36 registry languages + the porter311 control row),
+    #    and the language set must be the expected one.
+    if (nrows != 37) {
+        printf "expected 37 rows, got %d\n", nrows
         bad = 1
     }
     for (i = 1; i <= nreg; i++) {
@@ -205,7 +207,7 @@ END {
     # 5. a collected MISMATCH detail line is itself a failure.  The rows and
     #    the details can disagree (a driver that printed a detail line and
     #    then summarised mismatch=0), and the detail is the stronger evidence:
-    #    it is never ignored because the twelve rows happen to look clean.
+    #    it is never ignored because the 37 rows happen to look clean.
     if (ndet > 0) {
         printf "FAIL: %d MISMATCH detail line(s) present\n", ndet
         if (!det_printed) {
@@ -218,7 +220,7 @@ END {
 
     # 6. the driver summary line must be present and must be the healthy one.
     if (nsum < 1) {
-        printf "FAIL: missing driver summary '\''golden: 12/12 mismatch=0'\''\n"
+        printf "FAIL: missing driver summary '\''golden: 37/37 mismatch=0'\''\n"
         bad = 1
     }
 

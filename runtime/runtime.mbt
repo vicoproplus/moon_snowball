@@ -32,6 +32,7 @@ pub(all) struct Among {
   substring_i : Int32
   result : Int32
   cb : ((Env) -> Bool)?
+  routine_id : Int32
 }
 
 ///|
@@ -77,8 +78,9 @@ pub fn Among::new(
   substring_i : Int32,
   result : Int32,
   cb~ : ((Env) -> Bool)? = None,
+  routine_id~ : Int32 = 0,
 ) -> Self {
-  { s, substring_i, result, cb, }
+  { s, substring_i, result, cb, routine_id, }
 }
 
 // ---------------------------------------------------------------- groupings
@@ -285,9 +287,9 @@ pub fn eq_v_b(e : Env, s : String) -> Bool {
 /// the `else if cursor > c_bra` arm, exactly as in C.
 pub fn replace_s(e : Env, c_bra : Int32, c_ket : Int32, s : String) -> Int32 {
   let adjustment = s.length() - (c_ket - c_bra)
-  e.current = e.current.view(end_offset=c_bra).to_owned() +
+  e.current = e.current.clamped_view(end=c_bra).to_owned() +
     s +
-    e.current.view(start_offset=c_ket).to_owned()
+    e.current.clamped_view(start=c_ket).to_owned()
   if adjustment != 0 {
     e.limit += adjustment
     if e.cursor >= c_ket {
@@ -331,8 +333,8 @@ pub fn slice_del(e : Env) -> Unit {
   slice_check(e)
   let slice_size = e.ket - e.bra
   if slice_size != 0 {
-    e.current = e.current.view(end_offset=e.bra).to_owned() +
-      e.current.view(start_offset=e.ket).to_owned()
+    e.current = e.current.clamped_view(end=e.bra).to_owned() +
+      e.current.clamped_view(start=e.ket).to_owned()
     e.limit -= slice_size
     if e.cursor >= e.ket {
       e.cursor -= slice_size
@@ -364,14 +366,14 @@ pub fn insert(e : Env, c_bra : Int32, c_ket : Int32, s : String) -> Unit {
 /// copy of `[bra, ket)`; read-only, no state change.
 pub fn slice_to(e : Env) -> String {
   slice_check(e)
-  e.current.view(start_offset=e.bra, end_offset=e.ket).to_owned()
+  e.current.clamped_view(start=e.bra, end=e.ket).to_owned()
 }
 
 ///|
 /// C `assign_to` (snowball_runtime.c:605-613): return a copy of `[0, limit)`;
 /// read-only, no state change.
 pub fn assign_to(e : Env) -> String {
-  e.current.view(end_offset=e.limit).to_owned()
+  e.current.clamped_view(end=e.limit).to_owned()
 }
 
 // --------------------------------------------------------------- among tables
@@ -611,4 +613,238 @@ pub fn find_among_b_linear(e : Env, v : Array[Among]) -> Int32 {
   }
   e.cursor = c - best_len
   v[best].result
+}
+
+// -------------------------------------------------------- routine-id amongs
+// Trial extension for languages whose Snowball among tables carry routines
+// (finnish a_7, hindi a_0, polish a_2).  Protocol:
+//   * `Among.routine_id != 0` marks a gated entry;
+//   * `find_among_fwd_id` / `find_among_bwd_id` return
+//       < 1_000_000     the ordinary among result (no routine involved), or
+//       1_000_000 + k   entry index k needs its routine; the cursor sits at
+//                       the full match and the caller dispatches routine k,
+//                       then on success resets the cursor to c0 +/- len(w.s)
+//                       and reads `v[k].result`, or resumes the suffix chain
+//                       with `find_among_resume_fwd` / `find_among_resume_bwd`
+//                       passing the cursor value from the original call (c0).
+
+///|
+/// Forward among search that exposes routine-id entries as sentinel
+/// `1_000_000 + index` instead of invoking a callback. Used by generated
+/// per-table wrappers to dispatch routines. Returns the ordinary among
+/// result (or 0 on chain exhaustion) when no routine-id entry matches.
+pub fn find_among_fwd_id(e : Env, v : Array[Among]) -> Int32 {
+  let mut i = 0
+  let mut j = v.length()
+  let c = e.cursor
+  let l = e.limit
+  let mut common_i = 0
+  let mut common_j = 0
+  let mut first_key_inspected = false
+  while true {
+    let k = i + ((j - i) >> 1)
+    let mut diff = 0
+    let mut common = if common_i < common_j { common_i } else { common_j }
+    let w = v[k]
+    let mut i2 = common
+    while i2 < w.s.length() {
+      if c + common == l {
+        diff = -1
+        break
+      }
+      diff = code_point(e.current, c + common) - code_point(w.s, i2)
+      if diff != 0 {
+        break
+      }
+      common += 1
+      i2 += 1
+    }
+    if diff < 0 {
+      j = k
+      common_j = common
+    } else {
+      i = k
+      common_i = common
+    }
+    if j - i <= 1 {
+      if i > 0 {
+        break
+      }
+      if j == i {
+        break
+      }
+      if first_key_inspected {
+        break
+      }
+      first_key_inspected = true
+    }
+  }
+  while true {
+    let w = v[i]
+    if common_i >= w.s.length() {
+      e.cursor = c + w.s.length()
+      if w.routine_id != 0 {
+        return 1_000_000 + i
+      }
+      match w.cb {
+        None => return w.result
+        Some(f) =>
+          if f(e) {
+            e.cursor = c + w.s.length()
+            return w.result
+          }
+      }
+    }
+    i = w.substring_i
+    if i < 0 {
+      return 0
+    }
+  } nobreak {
+    0
+  }
+}
+
+///|
+/// Backward twin of `find_among_fwd_id`.
+pub fn find_among_bwd_id(e : Env, v : Array[Among]) -> Int32 {
+  let mut i = 0
+  let mut j = v.length()
+  let c = e.cursor
+  let lb = e.limit_backward
+  let mut common_i = 0
+  let mut common_j = 0
+  let mut first_key_inspected = false
+  while true {
+    let k = i + ((j - i) >> 1)
+    let mut diff = 0
+    let mut common = if common_i < common_j { common_i } else { common_j }
+    let w = v[k]
+    let mut i2 = w.s.length() - 1 - common
+    while i2 >= 0 {
+      if c - common == lb {
+        diff = -1
+        break
+      }
+      diff = code_point(e.current, c - 1 - common) - code_point(w.s, i2)
+      if diff != 0 {
+        break
+      }
+      common += 1
+      i2 -= 1
+    }
+    if diff < 0 {
+      j = k
+      common_j = common
+    } else {
+      i = k
+      common_i = common
+    }
+    if j - i <= 1 {
+      if i > 0 {
+        break
+      }
+      if j == i {
+        break
+      }
+      if first_key_inspected {
+        break
+      }
+      first_key_inspected = true
+    }
+  }
+  while true {
+    let w = v[i]
+    if common_i >= w.s.length() {
+      e.cursor = c - w.s.length()
+      if w.routine_id != 0 {
+        return 1_000_000 + i
+      }
+      match w.cb {
+        None => return w.result
+        Some(f) =>
+          if f(e) {
+            e.cursor = c - w.s.length()
+            return w.result
+          }
+      }
+    }
+    i = w.substring_i
+    if i < 0 {
+      return 0
+    }
+  } nobreak {
+    0
+  }
+}
+
+///|
+/// Resume a forward suffix chain from entry `at` (its routine refused);
+/// `c0` is the cursor value on the find_among_fwd_id call. Chain exhaustion
+/// returns 0 leaving the cursor at the last matched entry (canonical).
+pub fn find_among_resume_fwd(
+  e : Env,
+  v : Array[Among],
+  c0 : Int32,
+  at : Int32,
+) -> Int32 {
+  let mut i = v[at].substring_i
+  let common_i = v[at].s.length()
+  while true {
+    if i < 0 {
+      return 0
+    }
+    let w = v[i]
+    if common_i >= w.s.length() {
+      e.cursor = c0 + w.s.length()
+      if w.routine_id != 0 {
+        return 1_000_000 + i
+      }
+      match w.cb {
+        None => return w.result
+        Some(f) =>
+          if f(e) {
+            e.cursor = c0 + w.s.length()
+            return w.result
+          }
+      }
+    }
+    i = w.substring_i
+  } nobreak {
+    0
+  }
+}
+
+///|
+/// Backward twin of `find_among_resume_fwd`.
+pub fn find_among_resume_bwd(
+  e : Env,
+  v : Array[Among],
+  c0 : Int32,
+  at : Int32,
+) -> Int32 {
+  let mut i = v[at].substring_i
+  let common_i = v[at].s.length()
+  while true {
+    if i < 0 {
+      return 0
+    }
+    let w = v[i]
+    if common_i >= w.s.length() {
+      e.cursor = c0 - w.s.length()
+      if w.routine_id != 0 {
+        return 1_000_000 + i
+      }
+      match w.cb {
+        None => return w.result
+        Some(f) =>
+          if f(e) {
+            e.cursor = c0 - w.s.length()
+            return w.result
+          }
+      }
+    }
+    i = w.substring_i
+  } nobreak {
+    0
+  }
 }
