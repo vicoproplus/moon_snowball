@@ -18,7 +18,15 @@ pub fn find_among_b(Env, Array[Among]) -> Int32
 
 pub fn find_among_b_linear(Env, Array[Among]) -> Int32
 
+pub fn find_among_bwd_id(Env, Array[Among]) -> Int32
+
+pub fn find_among_fwd_id(Env, Array[Among]) -> Int32
+
 pub fn find_among_linear(Env, Array[Among]) -> Int32
+
+pub fn find_among_resume_bwd(Env, Array[Among], Int32, Int32) -> Int32
+
+pub fn find_among_resume_fwd(Env, Array[Among], Int32, Int32) -> Int32
 
 pub fn get_current(Env) -> String
 
@@ -67,8 +75,9 @@ pub(all) struct Among {
   substring_i : Int32
   result : Int32
   cb : ((Env) -> Bool)?
+  routine_id : Int32
 }
-pub fn Among::new(String, Int32, Int32, cb? : ((Env) -> Bool)?) -> Self
+pub fn Among::new(String, Int32, Int32, cb? : ((Env) -> Bool)?, routine_id? : Int32) -> Self
 
 pub(all) struct Env {
   mut current : String

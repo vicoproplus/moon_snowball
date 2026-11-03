@@ -123,9 +123,17 @@ fn wired_rows() -> Array[Row] raise @fs.IOError {
         let p = @dutch.Dutch::new()
         word => @dutch.stem_word(p, word)
       }
+      "dutch_porter" => {
+        let p = @dutch_porter.DutchPorter::new()
+        word => @dutch_porter.stem_word(p, word)
+      }
       "english" => {
         let p = @english.English::new()
         word => @english.stem_word(p, word)
+      }
+      "finnish" => {
+        let p = @finnish.Finnish::new()
+        word => @finnish.stem_word(p, word)
       }
       "french" => {
         let p = @french.French::new()
@@ -135,9 +143,17 @@ fn wired_rows() -> Array[Row] raise @fs.IOError {
         let p = @german.German::new()
         word => @german.stem_word(p, word)
       }
+      "hindi" => {
+        let p = @hindi.Hindi::new()
+        word => @hindi.stem_word(p, word)
+      }
       "italian" => {
         let p = @italian.Italian::new()
         word => @italian.stem_word(p, word)
+      }
+      "polish" => {
+        let p = @polish.Polish::new()
+        word => @polish.stem_word(p, word)
       }
       "porter" => {
         let p = @porter.Porter::new()
@@ -158,6 +174,90 @@ fn wired_rows() -> Array[Row] raise @fs.IOError {
       "turkish" => {
         let p = @turkish.Turkish::new()
         word => @turkish.stem_word(p, word)
+      }
+      "armenian" => {
+        let p = @armenian.Armenian::new()
+        word => @armenian.stem_word(p, word)
+      }
+      "basque" => {
+        let p = @basque.Basque::new()
+        word => @basque.stem_word(p, word)
+      }
+      "catalan" => {
+        let p = @catalan.Catalan::new()
+        word => @catalan.stem_word(p, word)
+      }
+      "czech" => {
+        let p = @czech.Czech::new()
+        word => @czech.stem_word(p, word)
+      }
+      "danish" => {
+        let p = @danish.Danish::new()
+        word => @danish.stem_word(p, word)
+      }
+      "esperanto" => {
+        let p = @esperanto.Esperanto::new()
+        word => @esperanto.stem_word(p, word)
+      }
+      "estonian" => {
+        let p = @estonian.Estonian::new()
+        word => @estonian.stem_word(p, word)
+      }
+      "greek" => {
+        let p = @greek.Greek::new()
+        word => @greek.stem_word(p, word)
+      }
+      "hungarian" => {
+        let p = @hungarian.Hungarian::new()
+        word => @hungarian.stem_word(p, word)
+      }
+      "indonesian" => {
+        let p = @indonesian.Indonesian::new()
+        word => @indonesian.stem_word(p, word)
+      }
+      "irish" => {
+        let p = @irish.Irish::new()
+        word => @irish.stem_word(p, word)
+      }
+      "lithuanian" => {
+        let p = @lithuanian.Lithuanian::new()
+        word => @lithuanian.stem_word(p, word)
+      }
+      "nepali" => {
+        let p = @nepali.Nepali::new()
+        word => @nepali.stem_word(p, word)
+      }
+      "norwegian" => {
+        let p = @norwegian.Norwegian::new()
+        word => @norwegian.stem_word(p, word)
+      }
+      "persian" => {
+        let p = @persian.Persian::new()
+        word => @persian.stem_word(p, word)
+      }
+      "romanian" => {
+        let p = @romanian.Romanian::new()
+        word => @romanian.stem_word(p, word)
+      }
+      "serbian" => {
+        let p = @serbian.Serbian::new()
+        word => @serbian.stem_word(p, word)
+      }
+      "sesotho" => {
+        let p = @sesotho.Sesotho::new()
+        word => @sesotho.stem_word(p, word)
+      }
+      "swedish" => {
+        let p = @swedish.Swedish::new()
+        word => @swedish.stem_word(p, word)
+      }
+      "tamil" => {
+        let p = @tamil.Tamil::new()
+        word => @tamil.stem_word(p, word)
+      }
+      "yiddish" => {
+        let p = @yiddish.Yiddish::new()
+        word => @yiddish.stem_word(p, word)
       }
       _ => fail("golden: unknown registry entry: \{e.name}")
     }
@@ -204,7 +304,7 @@ fn join_path(base : String, rel : String) -> String {
   let trimmed = if end == base.length() {
     base
   } else {
-    base.view(start_offset=0, end_offset=end).to_owned()
+    base.clamped_view(start=0, end=end).to_owned()
   }
   if trimmed.length() == 0 {
     rel
@@ -369,10 +469,10 @@ fn run_one(
     while ee < en && exp[ee] != '\n' {
       ee += 1
     }
-    let word = voc.view(start_offset=vs, end_offset=ve).to_owned()
-    let want = exp.view(start_offset=es, end_offset=ee)
+    let word = voc.clamped_view(start=vs, end=ve).to_owned()
+    let want = exp.clamped_view(start=es, end=ee)
     let got = (row.stem)(word) catch { _ => "<lab escaped>" }
-    if !(got.view() == want) {
+    if !(got == want.to_owned()) {
       mismatch += 1
       if shown < 5 {
         shown += 1
@@ -418,16 +518,41 @@ fn gen_lines(module_root : String, name : String) -> Int32 raise @fs.IOError {
 fn baseline_rows() -> Array[(String, Int32)] {
   [
     ("arabic", 1063),
+    ("armenian", 350),
+    ("basque", 711),
+    ("catalan", 838),
+    ("czech", 445),
+    ("danish", 315),
     ("dutch", 1572),
+    ("dutch_porter", 577),
     ("english", 885),
+    ("esperanto", 763),
+    ("estonian", 947),
+    ("finnish", 866),
     ("french", 1171),
     ("german", 553),
+    ("greek", 2485),
+    ("hindi", 204),
+    ("hungarian", 557),
+    ("indonesian", 486),
+    ("irish", 287),
     ("italian", 837),
+    ("lithuanian", 480),
+    ("nepali", 282),
+    ("norwegian", 323),
+    ("persian", 515),
+    ("polish", 367),
     ("porter", 538),
     ("portuguese", 730),
+    ("romanian", 777),
     ("russian", 511),
+    ("serbian", 3314),
+    ("sesotho", 178),
     ("spanish", 768),
+    ("swedish", 318),
+    ("tamil", 1101),
     ("turkish", 2209),
+    ("yiddish", 875),
     ("porter311", 570),
   ]
 }
@@ -476,8 +601,8 @@ fn parse_args(args : Array[String]) -> (String?, String?) raise @fs.IOError {
       data_root = Some(args[i + 1])
       i += 2
     } else if a.length() > 12 &&
-      a.view(start_offset=0, end_offset=12).to_owned() == "--data-root=" {
-      data_root = Some(a.view(start_offset=12).to_owned())
+      a.clamped_view(start=0, end=12).to_owned() == "--data-root=" {
+      data_root = Some(a.clamped_view(start=12).to_owned())
       i += 1
     } else if a == "--arabic-dir" {
       if i + 1 >= n {
@@ -486,8 +611,8 @@ fn parse_args(args : Array[String]) -> (String?, String?) raise @fs.IOError {
       arabic_dir = Some(args[i + 1])
       i += 2
     } else if a.length() > 13 &&
-      a.view(start_offset=0, end_offset=13).to_owned() == "--arabic-dir=" {
-      arabic_dir = Some(a.view(start_offset=13).to_owned())
+      a.clamped_view(start=0, end=13).to_owned() == "--arabic-dir=" {
+      arabic_dir = Some(a.clamped_view(start=13).to_owned())
       i += 1
     } else {
       fail("golden: unknown argument: \{a}")
@@ -765,7 +890,7 @@ fn repeated_suffix_input(n : Int32) -> String {
   }
   let rem = n - out.length()
   if rem > 0 {
-    out = out + pattern.view(start_offset=0, end_offset=rem).to_owned()
+    out = out + pattern.clamped_view(start=0, end=rem).to_owned()
   }
   out
 }
@@ -851,7 +976,7 @@ fn check_dutch_instance_reuse(data_root : String) -> Int32 raise @fs.IOError {
     while end < n && text[end] != '\n' {
       end += 1
     }
-    let word = text.view(start_offset=start, end_offset=end).to_owned()
+    let word = text.clamped_view(start=start, end=end).to_owned()
     let reused = @dutch.stem_word(shared, word) catch { _ => lab_escaped }
     let fresh = @dutch.stem_word(@dutch.Dutch::new(), word) catch {
       _ => lab_escaped
@@ -921,16 +1046,16 @@ fn check_latin_boundaries(data_root : String) -> Unit raise @fs.IOError {
 /// `aarayış` (line 14) keeps the `ı` too but is left untouched, so it would
 /// test nothing.  Both expectations are read from `output.txt` at run time;
 /// only the line numbers are written down here.
-let b02_russian_yo_line : Int = 49674
+let b02_russian_yo_line : Int32 = 49674
 
 ///|
-let b08_turkish_dotless_line : Int = 33
+let b08_turkish_dotless_line : Int32 = 33
 
 ///|
 /// B-11's line count (spec §4.4: "同实例前 1000 行 vs 逐行新建").  Every corpus
 /// head the segment reads is at least this long, so one read serves both the
 /// anchored cases and B-11.
-let b11_line_count : Int = 1000
+let b11_line_count : Int32 = 1000
 
 ///|
 /// One of the three non-latin languages of spec §4.4, wired twice: through ONE
@@ -953,7 +1078,10 @@ struct SpecLang {
 /// comparison rows and this segment read different directories.  The shared
 /// instance is the one the row was wired around, exactly like `wired_rows`
 /// builds it; `stem_fresh` is still a brand-new instance per call.
-fn spec_langs(data_root : String, arabic_dir : String) -> Array[SpecLang] raise @fs.IOError {
+fn spec_langs(
+  data_root : String,
+  arabic_dir : String,
+) -> Array[SpecLang] raise @fs.IOError {
   let rows = wired_rows()
   let out : Array[SpecLang] = []
   for name in ["russian", "arabic", "turkish"] {
@@ -971,16 +1099,15 @@ fn spec_langs(data_root : String, arabic_dir : String) -> Array[SpecLang] raise 
           "turkish" => w => @turkish.stem_word(@turkish.Turkish::new(), w)
           _ => row.stem
         }
-        out.push(
-          {
-            name: row.name,
-            dir: row_dir(row, data_root, arabic_dir),
-            stem: row.stem,
-            stem_fresh: fresh,
-          },
-        )
+        out.push({
+          name: row.name,
+          dir: row_dir(row, data_root, arabic_dir),
+          stem: row.stem,
+          stem_fresh: fresh,
+        })
       }
-      None => fail("golden: registry is missing the spec §4.4 language: \{name}")
+      None =>
+        fail("golden: registry is missing the spec §4.4 language: \{name}")
     }
   }
   out
@@ -1003,7 +1130,7 @@ fn stem_caught(
 /// The first `n` lines of `path`, under the same reading rule as `count_lines`
 /// (every LF starts a line, a final line without LF still counts).  `x/fs` has
 /// no partial read, so the file is read once and only `n` lines are kept.
-fn head_lines(path : String, n : Int) -> Array[String] raise @fs.IOError {
+fn head_lines(path : String, n : Int32) -> Array[String] raise @fs.IOError {
   let s = @fs.read_file_to_string(path, encoding="utf8")
   let out : Array[String] = []
   let len = s.length()
@@ -1011,13 +1138,13 @@ fn head_lines(path : String, n : Int) -> Array[String] raise @fs.IOError {
   let mut i = 0
   while i < len && out.length() < n {
     if s[i] == '\n' {
-      out.push(s.view(start_offset=start, end_offset=i).to_owned())
+      out.push(s.clamped_view(start=start, end=i).to_owned())
       start = i + 1
     }
     i += 1
   }
   if out.length() < n && start < len {
-    out.push(s.view(start_offset=start).to_owned())
+    out.push(s.clamped_view(start=start).to_owned())
   }
   out
 }
@@ -1027,7 +1154,7 @@ fn head_lines(path : String, n : Int) -> Array[String] raise @fs.IOError {
 /// error: a truncated data root must never turn an anchored case into a pass.
 fn corpus_line(
   lines : Array[String],
-  n : Int,
+  n : Int32,
   file : String,
 ) -> String raise @fs.IOError {
   if n > lines.length() {
@@ -1093,10 +1220,10 @@ fn anchored_case(
   lang : SpecLang,
   voc : Array[String],
   out : Array[String],
-  n : Int,
+  n : Int32,
   expect_word? : String,
   require_char? : (Char, String),
-  require_shortened? : Bool = false,
+  require_shortened~ : Bool = false,
 ) -> Bool raise @fs.IOError {
   let word = corpus_line(voc, n, "\{lang.name}/voc.txt")
   let want = corpus_line(out, n, "\{lang.name}/output.txt")
@@ -1118,7 +1245,9 @@ fn anchored_case(
   }
   let got = stem_caught(lang.stem, word)
   if require_shortened && got == word {
-    fail("golden: boundary \{id} input was not shortened (got == input): \{word}")
+    fail(
+      "golden: boundary \{id} input was not shortened (got == input): \{word}",
+    )
   }
   emit_case(
     id,
@@ -1141,7 +1270,7 @@ fn anchored_case(
 fn run_spec_boundary_cases(
   data_root : String,
   arabic_dir : String,
-) -> Int raise @fs.IOError {
+) -> Int32 raise @fs.IOError {
   let langs = spec_langs(data_root, arabic_dir)
   let ru = langs[0]
   let ar = langs[1]
@@ -1158,7 +1287,14 @@ fn run_spec_boundary_cases(
   let mut failed = 0
   let mut attempted = 0
   attempted += 1
-  if !anchored_case("B-01", ru, ru_voc, ru_out, 2, expect_word="абиссинию") {
+  if !anchored_case(
+      "B-01",
+      ru,
+      ru_voc,
+      ru_out,
+      2,
+      expect_word="абиссинию",
+    ) {
     failed += 1
   }
   attempted += 1
@@ -1255,14 +1391,8 @@ fn run_spec_boundary_cases(
   let b09_measured = "russian=\{render_value(b09_russian)} arabic=\{render_value(b09_arabic)} turkish=\{render_value(b09_turkish)}"
   attempted += 1
   if !emit_case(
-      "B-09",
-      "russian,arabic,turkish",
-      "synthetic:spec-U4-§4.4-B-09",
-      "\"\"",
-      "\"\"",
-      b09_measured,
-      b09_ok,
-      " golden=<empty>",
+      "B-09", "russian,arabic,turkish", "synthetic:spec-U4-§4.4-B-09", "\"\"", "\"\"",
+      b09_measured, b09_ok, " golden=<empty>",
     ) {
     failed += 1
   }

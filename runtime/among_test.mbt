@@ -45,7 +45,7 @@ fn build_reverse_table(rows : Array[(String, Int32)]) -> Array[@runtime.Among] {
     let mut link = -1
     let mut t = 1
     while t < s.length() && link < 0 {
-      let suffix = s.view(start_offset=t).to_owned()
+      let suffix = s.clamped_view(start=t).to_owned()
       let mut q = 0
       while q < idx {
         if sorted[q].0 == suffix {

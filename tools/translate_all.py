@@ -2,14 +2,14 @@
 """Translate Snowball-generated Python stemmers into MoonBit packages.
 
 The input list is not written here: it comes from `tools/lang_inputs.py`, the
-canonical table of pipeline inputs (the 11 upstream-generated deliverables plus
+canonical table of pipeline inputs (the 36 upstream-generated deliverables plus
 the `porter311` vendored control entry).  Every count below is derived from that
 table, so adding or retiring an input never touches this driver.
 
 Usage:
     python tools/translate_all.py --gen-dir <dir> --out-root <dir> \
         --module <module-name> [--vendor-dir <dir>] [--lang <name> ...] \
-        [--include-control]
+        [--exclude <name> ...] [--include-control]
 
     --gen-dir        directory holding the generated `<lang>_stemmer.py` files
                      (output of tools/gen_all.sh)
@@ -21,6 +21,11 @@ Usage:
                      parent of this script's directory
     --lang           translate only the named table entries (repeatable);
                      default is every deliverable entry
+    --exclude        drop the named entries from the selection (repeatable).
+                     Used by the no-WSL vendored branch, which has no 3.2.0
+                     source for `porter` and must leave the committed
+                     `<lang>/<lang>_gen.mbt` untouched rather than overwrite it
+                     with the 3.1.1 PyPI form
     --include-control
                      also translate non-deliverable control entries
                      (currently `porter311`); needed for the 12th gate row
@@ -39,12 +44,20 @@ sys.path.insert(0, HERE)
 import lang_inputs  # noqa: E402
 
 MOON_PKG_TEMPLATE = 'import {{\n  "{module}/runtime" @rt,\n}}\n'
+MOON_PKG_SUPPRESSED = (
+    'import {{\n  "{module}/runtime" @rt,\n}}\n\n'
+    "// `stem_word` carries a contract-mandated unconditional `raise @runtime.Lab`,\n"
+    "// but this algorithm never raises: the declared error type is intentionally\n"
+    "// unused, so MoonBit's `unused_error_type` warning is suppressed for this\n"
+    "// package only.\n"
+    'warnings = "-unused_error_type"\n'
+)
 
 
-def select_entries(names, include_control):
+def select_entries(names, include_control, exclude=()):
     """Resolve the CLI selection against the canonical table."""
+    known = lang_inputs.all_names()
     if names:
-        known = lang_inputs.all_names()
         unknown = [n for n in names if n not in known]
         if unknown:
             raise SystemExit(f"unknown language input: {', '.join(unknown)} "
@@ -53,6 +66,13 @@ def select_entries(names, include_control):
     else:
         entries = [e for e in lang_inputs.LANG_INPUTS
                    if e["deliverable"] or include_control]
+    if exclude:
+        unknown = [n for n in exclude if n not in known]
+        if unknown:
+            raise SystemExit(f"unknown excluded language input: {', '.join(unknown)} "
+                             f"(known: {', '.join(known)})")
+        dropped = set(exclude)
+        entries = [e for e in entries if e["name"] not in dropped]
     if not entries:
         raise SystemExit("no input selected")
     return entries
@@ -75,10 +95,11 @@ def main(argv):
     parser.add_argument("--module", required=True)
     parser.add_argument("--vendor-dir", default=os.path.join(HERE, "vendor"))
     parser.add_argument("--lang", action="append", default=[])
+    parser.add_argument("--exclude", action="append", default=[])
     parser.add_argument("--include-control", action="store_true")
     args = parser.parse_args(argv[1:])
 
-    entries = select_entries(args.lang, args.include_control)
+    entries = select_entries(args.lang, args.include_control, args.exclude)
     gen_dir = os.path.abspath(args.gen_dir)
     out_root = os.path.abspath(args.out_root)
     vendor_dir = os.path.abspath(args.vendor_dir)
@@ -96,14 +117,19 @@ def main(argv):
         name = entry["name"]
         pkg = os.path.join(out_root, name)
         os.makedirs(pkg, exist_ok=True)
-        pkg_file = os.path.join(pkg, "moon.pkg")
-        if not os.path.exists(pkg_file):
-            with open(pkg_file, "w", encoding="utf-8", newline="\n") as f:
-                f.write(MOON_PKG_TEMPLATE.format(module=args.module))
         src = resolve_py(entry, gen_dir, vendor_dir)
         dst = os.path.join(pkg, f"{name}_gen.mbt")
         subprocess.run([sys.executable, translator, src, dst,
                         entry["struct"], "rt"], check=True)
+        pkg_file = os.path.join(pkg, "moon.pkg")
+        with open(dst, encoding="utf-8") as f:
+            generated = f.read()
+        if "// no-lab:" in generated:
+            content = MOON_PKG_SUPPRESSED.format(module=args.module)
+        else:
+            content = MOON_PKG_TEMPLATE.format(module=args.module)
+        with open(pkg_file, "w", encoding="utf-8", newline="\n") as f:
+            f.write(content)
 
     print(f"translated {len(entries)} input(s) into {out_root}")
     return 0
