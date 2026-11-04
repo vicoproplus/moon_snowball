@@ -1,0 +1,89 @@
+boundary: check_gate root=E:\code\moonbit比赛\moon_snowball
+boundary: N8: packages=15 (14 sub-packages + empty-rel root)
+boundary: N8: rel-set == expected 15 (<root>, arabic, cmd/golden, dutch, english, french, german, italian, porter, porter311, portuguese, runtime, russian, spanish, turkish)
+boundary: U3 boundary transcript: E:\code\moonbit比赛\moon_snowball\.planning\logs\u2\T7-golden.log (127 lines)
+boundary: BOUNDARY `boundary: latin failed=0` lines           got=1   want=1   OK
+boundary: BOUNDARY `case=<dutch-first-500-reuse> same=true` lines got=1   want=1   OK
+boundary: BOUNDARY lines containing `same=false`              got=0   want=0   OK
+boundary: BOUNDARY lines containing `ok=false`                got=0   want=0   OK
+boundary: BOUNDARY B-01 case=abaisse got=abaiss ok=true              OK
+boundary: BOUNDARY B-02 case=abaissait got=abaiss ok=true            OK
+boundary: BOUNDARY B-03 case=abaissé got=abaiss ok=true              OK
+boundary: BOUNDARY B-04 case=aargauer got=aargau ok=true             OK
+boundary: BOUNDARY B-05 case=aashöllen got=aasholl ok=true           OK
+boundary: BOUNDARY B-06 case=abenddämmerung got=abenddammer ok=true  OK
+boundary: BOUNDARY B-07 case=aarón got=aaron ok=true                 OK
+boundary: BOUNDARY B-08 case=abandonó got=abandon ok=true            OK
+boundary: BOUNDARY B-09 case=abarcará got=abarc ok=true              OK
+boundary: BOUNDARY B-10 case=abbandonerà got=abbandon ok=true        OK
+boundary: BOUNDARY B-11 case=abbandonò got=abbandon ok=true          OK
+boundary: BOUNDARY B-12 case=á got=á ok=true                         OK
+boundary: BOUNDARY B-13 case=ã got=ã ok=true                         OK
+boundary: BOUNDARY B-14 case=aacho got=aach ok=true                  OK
+boundary: BOUNDARY B-15 case=á got=á ok=true                         OK
+boundary: BOUNDARY B-16 case=áan got=áan ok=true                     OK
+boundary: BOUNDARY B-17 empty string                          offset=16 OK
+boundary: BOUNDARY B-18 pure punctuation                      offset=17 OK
+boundary: BOUNDARY B-19 uppercase Aargauer                    offset=18 OK
+boundary: BOUNDARY B-20 uppercase Strasse                     offset=19 OK
+boundary: BOUNDARY B-17 empty string                          offset=20 OK
+boundary: BOUNDARY B-18 pure punctuation                      offset=21 OK
+boundary: BOUNDARY B-19 uppercase Aargauer                    offset=22 OK
+boundary: BOUNDARY B-20 uppercase Strasse                     offset=23 OK
+boundary: BOUNDARY B-17 empty string                          offset=24 OK
+boundary: BOUNDARY B-18 pure punctuation                      offset=25 OK
+boundary: BOUNDARY B-19 uppercase Aargauer                    offset=26 OK
+boundary: BOUNDARY B-20 uppercase Strasse                     offset=27 OK
+boundary: BOUNDARY B-17 empty string                          offset=28 OK
+boundary: BOUNDARY B-18 pure punctuation                      offset=29 OK
+boundary: BOUNDARY B-19 uppercase Aargauer                    offset=30 OK
+boundary: BOUNDARY B-20 uppercase Strasse                     offset=31 OK
+boundary: BOUNDARY B-17 empty string                          offset=32 OK
+boundary: BOUNDARY B-18 pure punctuation                      offset=33 OK
+boundary: BOUNDARY B-19 uppercase Aargauer                    offset=34 OK
+boundary: BOUNDARY B-20 uppercase Strasse                     offset=35 OK
+boundary: BOUNDARY B-17 empty string                          offset=36 OK
+boundary: BOUNDARY B-18 pure punctuation                      offset=37 OK
+boundary: BOUNDARY B-19 uppercase Aargauer                    offset=38 OK
+boundary: BOUNDARY B-20 uppercase Strasse                     offset=39 OK
+boundary: BOUNDARY B-21 10,000-char input                     offset=40 OK
+boundary: BOUNDARY B-21 10,000-char input                     offset=41 OK
+boundary: BOUNDARY B-21 10,000-char input                     offset=42 OK
+boundary: BOUNDARY B-21 10,000-char input                     offset=43 OK
+boundary: BOUNDARY B-21 10,000-char input                     offset=44 OK
+boundary: BOUNDARY B-21 10,000-char input                     offset=45 OK
+boundary: BOUNDARY dutch reuse `same=true`                    offset=46 OK
+boundary: BOUNDARY latin summary                              offset=47 OK
+boundary: GATE PASS packages=15
+lang=arabic checked=9196214 mismatch=0 ms=152614
+lang=dutch checked=45670 mismatch=0 ms=300
+lang=english checked=42649 mismatch=0 ms=286
+lang=french checked=21653 mismatch=0 ms=185
+lang=german checked=35053 mismatch=0 ms=417
+lang=italian checked=37426 mismatch=0 ms=451
+lang=porter checked=42603 mismatch=0 ms=174
+lang=portuguese checked=32016 mismatch=0 ms=287
+lang=russian checked=49785 mismatch=0 ms=218
+lang=spanish checked=28378 mismatch=0 ms=260
+lang=turkish checked=96325 mismatch=0 ms=1380
+lang=porter311 checked=42603 mismatch=0 ms=188
+lang=arabic lines=1063
+lang=dutch lines=1572
+lang=english lines=885
+lang=french lines=1171
+lang=german lines=553
+lang=italian lines=837
+lang=porter lines=538
+lang=portuguese lines=730
+lang=russian lines=511
+lang=spanish lines=768
+lang=turkish lines=2209
+lang=porter311 lines=570
+stage=golden rows=12 mismatch=0 elapsed=163
+golden lines=12 drift=line-count drift: 0/12 warned=0
+GATE OK
+stage=golden
+exit=0
+elapsed=163
+exit=0
+status: exited (code 0)
